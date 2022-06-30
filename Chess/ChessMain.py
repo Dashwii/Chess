@@ -83,7 +83,7 @@ def main():
             elif e.type == p.MOUSEBUTTONUP and e.button == 1:
                 if not gs.pawn_promote:
                     end_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
-                    if end_sq == start_sq or end_sq is None or gs.board[start_sq[0]][start_sq[1]] == "--":
+                    if end_sq == start_sq or len(end_sq) == 0 or gs.board[start_sq[0]][start_sq[1]] == "--":
                         start_sq = ()
                     else:
                         if board_flipping and not gs.white_to_move:
