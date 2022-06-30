@@ -58,35 +58,28 @@ class ChessEngine:
 
     """
     Returns all moves for the pawn piece in the row and column. Will search for diagonal captures and vertical movement."""
-    def get_pawn_moves(self, r, c):
+    def get_pawn_moves(self, r, c, board):
         moves = []
-        turn = self.board[r][c][0]
+        turn = board[r][c][0]
         # Search for every column above the pawn. If nothing is blocking it it's a valid move.
-        for i, _ in enumerate(self.board):
-            if turn == "w":  # Go up the column from whites perspective
-                try:
-                    if r == 6 and self.board[r - 2][c] == "--":
-                        moves.append(Move((r, c), (r - 2, c), self.board))
-                    if self.board[r - 1][c] == "--":
-                        moves.append(Move((r, c), (r - 1, c), self.board))
-                    if self.board[r - 1][c - 1] != "--" and self.board[r - 1][c - 1][0] == "b":
-                        moves.append(Move((r, c),(r - 1, c - 1), self.board))
-                    if self.board[r - 1][c + 1] != "--" and self.board[r - 1][c + 1][0] == "b":
-                        moves.append(Move((r, c), (r - 1, c + 1), self.board))
-                except IndexError:
-                    pass
-            else:
-                try:
-                    if r == 1 and self.board[r + 2][c] == "--":
-                        moves.append(Move((r, c), (r + 2, c), self.board))
-                    if self.board[r + 1][c] == "--":  # Go down the column from whites perspective
-                        moves.append(Move((r, c), (r + 1, c), self.board))
-                    if self.board[r + 1][c - 1] != "--" and self.board[r + 1][c - 1][0] == "w":
-                        moves.append(Move((r, c),(r + 1, c - 1), self.board))
-                    if self.board[r + 1][c + 1] != "--" and self.board[r + 1][c + 1][0] == "w":
-                        moves.append(Move((r, c), (r + 1, c + 1), self.board))
-                except IndexError:
-                    pass
+        if turn == "w":  # Go up the column from whites perspective
+            if r == 6 and board[r - 2][c] == "--":
+                moves.append(Move((r, c), (r - 2, c), board))
+            if 0 <= r - 1 and board[r - 1][c] == "--":
+                moves.append(Move((r, c), (r - 1, c), board))
+            if (0 <= r - 1 and 0 <= c - 1) and board[r - 1][c - 1][0] != "b":
+                moves.append(Move((r, c),(r - 1, c - 1), board))
+            if (0 <= r - 1 and c + 1 < len(board)) and board[r - 1][c + 1][0] == "b":
+                moves.append(Move((r, c), (r - 1, c + 1), board))
+        else:
+            if r == 1 and board[r + 2][c] == "--":
+                moves.append(Move((r, c), (r + 2, c), board))
+            if r + 1 < len(board) and board[r + 1][c] == "--":  # Go down the column from whites perspective
+                moves.append(Move((r, c), (r + 1, c), board))
+            if (r + 1 < len(board) and 0 <= c - 1) and board[r + 1][c - 1] != "--" and board[r + 1][c - 1][0] == "w":
+                moves.append(Move((r, c),(r + 1, c - 1), board))
+            if (r + 1 < len(board) and c + 1 < len(board)) and board[r + 1][c + 1] != "--" and board[r + 1][c + 1][0] == "w":
+                moves.append(Move((r, c), (r + 1, c + 1), board))
         return moves
 
     """
