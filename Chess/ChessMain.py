@@ -80,10 +80,16 @@ def main():
             if e.type == p.MOUSEBUTTONDOWN:
                 if not gs.pawn_promote:
                     start_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
+                    # Prevent picking up pieces out of turn
+                    if len(start_sq) == 2:
+                        if gs.white_to_move and gs.board[start_sq[0]][start_sq[1]][0] != "w":
+                            start_sq = ()
+                        elif not gs.white_to_move and gs.board[start_sq[0]][start_sq[1]][0] != "b":
+                            start_sq = ()
             elif e.type == p.MOUSEBUTTONUP and e.button == 1:
-                if not gs.pawn_promote:
+                if not gs.pawn_promote and len(start_sq) == 2:
                     end_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
-                    if end_sq == start_sq or len(end_sq) == 0 or gs.board[start_sq[0]][start_sq[1]] == "--":
+                    if len(end_sq) != 2:
                         start_sq = ()
                     else:
                         if board_flipping and not gs.white_to_move:
