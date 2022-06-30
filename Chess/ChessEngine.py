@@ -61,13 +61,13 @@ class ChessEngine:
     def get_pawn_moves(self, r, c, board):
         moves = []
         turn = board[r][c][0]
-        # Search for every column above the pawn. If nothing is blocking it it's a valid move.
+        # Search for every column above the pawn. If nothing is blocking then it's a valid move.
         if turn == "w":  # Go up the column from whites perspective
             if r == 6 and board[r - 2][c] == "--":
                 moves.append(Move((r, c), (r - 2, c), board))
             if 0 <= r - 1 and board[r - 1][c] == "--":
                 moves.append(Move((r, c), (r - 1, c), board))
-            if (0 <= r - 1 and 0 <= c - 1) and board[r - 1][c - 1][0] != "b":
+            if (0 <= r - 1 and 0 <= c - 1) and board[r - 1][c - 1][0] == "b":
                 moves.append(Move((r, c),(r - 1, c - 1), board))
             if (0 <= r - 1 and c + 1 < len(board)) and board[r - 1][c + 1][0] == "b":
                 moves.append(Move((r, c), (r - 1, c + 1), board))
