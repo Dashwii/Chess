@@ -92,6 +92,8 @@ def main():
                         move = Move(start_sq, end_sq, gs.board)
                         for i in gs.current_valid_moves:
                             if move.id == i.id:
+                                if i.en_passant is not None:
+                                    move = i  # Turn the move into i, so we get the en_passant variables copied over
                                 move_sound.play()
                                 gs.do_move(move)
                                 start_sq = ()
