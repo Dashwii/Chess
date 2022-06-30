@@ -57,7 +57,6 @@ def main():
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z:
                     gs.undo_move()
-
         screen.fill((64, 64, 64))
         draw_board(screen, gs.board, start_sq)
         draw_pieces(screen, gs.board, gs, start_sq)
@@ -121,6 +120,13 @@ def draw_pieces(screen, chess_board, gs, start_sq):
             if square_highlight_pos is not None:
                 p.draw.rect(screen, "blue", p.Rect(BOARD_X + square_highlight_pos[1] * SQ_SIZE, BOARD_Y + square_highlight_pos[0] * SQ_SIZE, SQ_SIZE, SQ_SIZE), 6) # Invert row and columns to get actual screen representation of highlight position.
             screen.blit(IMAGES[piece], p.Rect(mouse_pos[0] - SQ_SIZE // 2, mouse_pos[1] - SQ_SIZE // 2, SQ_SIZE, SQ_SIZE))
+
+
+def render_all_moves(screen, gs):
+    # Renders all possible moves at the current game state
+    for move in gs.current_valid_moves:
+        p.draw.circle(screen, "dark gray",
+                      (SQ_SIZE // 2 + BOARD_X + (move.end_col * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (move.end_row * SQ_SIZE)), 20)
 
 
 if __name__ == "__main__":
