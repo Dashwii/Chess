@@ -20,6 +20,41 @@ white_text = font.render("White", True, "white")
 black_text = font.render("Black", True, "white")
 
 
+class PawnPromoteSelect:
+    def __init__(self):
+        self.padding = 50
+        self.queen_box = p.Rect(1600, self.padding + 100, 128, 128)
+        self.rook_box = p.Rect(1600, self.padding * 2 + 228, 128, 128)
+        self.knight_box = p.Rect(1600, self.padding * 3 + 356, 128, 128)
+        self.bishop_box = p.Rect(1600, self.padding * 4 + 484, 128, 128)
+
+    def render_images(self, screen, white_to_move):
+        if white_to_move:
+            current_turn = "w"
+        else:
+            current_turn = "b"
+
+        for box in [self.queen_box, self.rook_box, self.knight_box, self.bishop_box]:
+            p.draw.rect(screen, "blue", box, 5)
+        screen.blit(IMAGES[current_turn + "Q"], self.queen_box)
+        screen.blit(IMAGES[current_turn + "R"], self.rook_box)
+        screen.blit(IMAGES[current_turn + "N"], self.knight_box)
+        screen.blit(IMAGES[current_turn + "B"], self.bishop_box)
+
+    def get_input(self, events):
+        for event in events:
+            if event.type == p.MOUSEBUTTONDOWN:
+                pos = p.mouse.get_pos()
+                if self.queen_box.collidepoint(pos):
+                    return "Q"
+                elif self.rook_box.collidepoint(pos):
+                    return "R"
+                elif self.knight_box.collidepoint(pos):
+                    return "N"
+                elif self.bishop_box.collidepoint(pos):
+                    return "B"
+        return None
+
 def load_images():
     # Load images once into a dictionary for later access.
     pieces = ["bR", "bN", "bB", "bQ", "bK", "bP", "wR", "wN", "wB", "wQ", "wK", "wP"]
@@ -33,39 +68,62 @@ def main():
     screen = p.display.set_mode((WIDTH, HEIGHT))
     start_sq = ()
     gs = ChessEngine()
+    pawn_promote = PawnPromoteSelect()
     board_flipping = True
+    board_flipping_was_on = False
     while running:
         CLOCK.tick(FPS)
-        for e in p.event.get():
+        events = p.event.get()
+        for e in events:
             if e.type == p.QUIT:
                 running = False
             if e.type == p.MOUSEBUTTONDOWN:
-                start_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
+                if not gs.pawn_promote:
+                    start_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
             elif e.type == p.MOUSEBUTTONUP and e.button == 1:
-                end_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
-                if end_sq == start_sq or end_sq is None or gs.board[start_sq[0]][start_sq[1]] == "--":
-
-                    start_sq = ()
-                else:
-                    if board_flipping and not gs.white_to_move:
-                        start_sq = (opposite_flipped_index(start_sq[0]), opposite_flipped_index(start_sq[1]))
-                        end_sq = (opposite_flipped_index(end_sq[0]), opposite_flipped_index(end_sq[1]))
-                    move = Move(start_sq, end_sq, gs.board)
-                    for i in gs.current_valid_moves:
-                        if move.id == i.id:
-                            move_sound.play()
-                            gs.do_move(move)
-                            start_sq = ()
-                            break
-                        else:
-                            start_sq = ()
+                if not gs.pawn_promote:
+                    end_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
+                    if end_sq == start_sq or end_sq is None or gs.board[start_sq[0]][start_sq[1]] == "--":
+                        start_sq = ()
+                    else:
+                        if board_flipping and not gs.white_to_move:
+                            start_sq = (opposite_flipped_index(start_sq[0]), opposite_flipped_index(start_sq[1]))
+                            end_sq = (opposite_flipped_index(end_sq[0]), opposite_flipped_index(end_sq[1]))
+                        move = Move(start_sq, end_sq, gs.board)
+                        for i in gs.current_valid_moves:
+                            if move.id == i.id:
+                                move_sound.play()
+                                gs.do_move(move)
+                                start_sq = ()
+                                break
+                            else:
+                                start_sq = ()
             elif e.type == p.KEYDOWN:
-                if e.key == p.K_z:
+                if e.key == p.K_z and len(start_sq) == 0:  # Prevent while dragging a piece
                     gs.undo_move()
-                if e.key == p.K_f:
+                if e.key == p.K_f and len(start_sq) == 0:  # Prevent while dragging a piece
                     board_flipping = not board_flipping
                     print("Board flipping toggled.")
+
         screen.fill((64, 64, 64))
+        if gs.pawn_promote:
+            if board_flipping:
+                board_flipping = False  # Set board flipping to false for a second. We need to wait until user input on the piece to promote to.
+                board_flipping_was_on = True
+            promote_turn = gs.white_to_move  # Get the opposite turn as that's the pawn belonging to the promotion. gs always flicked the next turn.
+            pawn_promote.render_images(screen, promote_turn)
+            promotion = pawn_promote.get_input(events)
+            if promotion:
+                pawn_sq = gs.move_log[-1].end_sq
+                gs.promote(pawn_sq, promotion)
+                gs.pawn_promote = False
+                gs.white_to_move = not gs.white_to_move
+                gs.current_valid_moves = gs.get_valid_moves()
+                if board_flipping_was_on:
+                    board_flipping = True
+                    board_flipping_was_on = False
+
+
         draw_board(screen, gs.board, start_sq, board_flipping, gs.white_to_move)
         draw_pieces(screen, gs, start_sq, board_flipping, gs.white_to_move)
         screen.blit(current_turn_text, p.Rect(0, 40, 30, 30))
@@ -87,6 +145,8 @@ def click_sq_coordinates(board_flipping, white_to_move):
                 row_clicked = (BOARD_Y - click_pos[1]) // SQ_SIZE
                 col_clicked = (BOARD_X - click_pos[0]) // SQ_SIZE
             return row_clicked, col_clicked
+    else:
+        return ()
 
 
 def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move):
@@ -161,7 +221,7 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move):
         if piece != "--":
             mouse_pos = p.mouse.get_pos()
             square_highlight_pos = click_sq_coordinates(board_flipping, gs.white_to_move)
-            if square_highlight_pos is not None:
+            if len(square_highlight_pos) > 0:
                 if not board_flipping or white_to_move:
                     p.draw.rect(screen, "blue", p.Rect(BOARD_X + square_highlight_pos[1] * SQ_SIZE, BOARD_Y + square_highlight_pos[0] * SQ_SIZE, SQ_SIZE, SQ_SIZE), 6) # Invert row and columns to get actual screen representation of highlight position.
                 elif board_flipping and not white_to_move:

@@ -40,6 +40,13 @@ class ChessEngine:
             self.current_valid_moves = self.get_valid_moves()
 
     """
+    Promotes a pawn to the piece chosen"""
+    def promote(self, pawn_sq, piece_wanted):
+        turn = self.board[pawn_sq[0]][pawn_sq[1]][0]
+        self.board[pawn_sq[0]][pawn_sq[1]] = turn + piece_wanted
+        print("Piece promoted!")
+
+    """
     Will determine all valid moves considering king check"""
     def get_valid_moves(self):
         # Function will simulate every single move returned from possible moves.
