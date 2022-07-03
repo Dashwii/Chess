@@ -113,6 +113,9 @@ def main():
                 if e.key == p.K_f and len(start_sq) == 0:  # Prevent while dragging a piece
                     board_flipping = not board_flipping
                     print("Board flipping toggled.")
+                if e.key == p.K_p and len(start_sq) == 0:
+                    gs = ChessEngine()
+                    print("Board reset.")
 
         screen.fill((64, 64, 64))
         if gs.pawn_promote:
