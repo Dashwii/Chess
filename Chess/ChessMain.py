@@ -55,6 +55,7 @@ class PawnPromoteSelect:
                     return "B"
         return None
 
+
 def load_images():
     # Load images once into a dictionary for later access.
     pieces = ["bR", "bN", "bB", "bQ", "bK", "bP", "wR", "wN", "wB", "wQ", "wK", "wP"]
