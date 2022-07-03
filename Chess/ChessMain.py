@@ -154,6 +154,8 @@ def click_sq_coordinates(board_flipping, white_to_move):
                 row_clicked = (BOARD_Y - click_pos[1]) // SQ_SIZE
                 col_clicked = (BOARD_X - click_pos[0]) // SQ_SIZE
             return row_clicked, col_clicked
+        else:
+            return ()
     else:
         return ()
 
