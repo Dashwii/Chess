@@ -237,7 +237,6 @@ class ChessEngine:
     def get_bishop_moves(self, r, c, board):
         return self.diagonal_scan(r, c, board)
 
-
     def diagonal_scan(self, r, c, board):
         moves = []
         vectors = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
@@ -260,7 +259,6 @@ class ChessEngine:
                 else:
                     break
         return moves
-
 
     def horizontal_scan(self, r, c, board, reverse=False):
         _moves = []
