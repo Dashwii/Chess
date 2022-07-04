@@ -15,20 +15,29 @@ class ChessEngine:
         ]
         self.white_to_move = True
         self.pawn_promote = False
+        self.castling = {"W_Undo_Regain_Castle": None, "W_Queen_Side_Regain_Castle": None, "W_King_Side_Regain_Castle": None, "W_King_Side": True, "W_Queen_Side": True,
+                         "B_Undo_Regain_Castle": None, "B_Queen_Side_Regain_Castle": None, "B_King_Side_Regain_Castle": None,"B_King_Side": True, "B_Queen_Side": True}
+        # In these tuples the king's current row/column will be added in the respective indexes to see if the squares are clear.
+        self.king_side_vector_scans = [(0, 1), (0, 2)]
+        self.queen_side_vector_scans = [(0, -1), (0, -2), (0, -3)]
         self.move_log = []
         self.piece_moves_func = {"P": self.get_pawn_moves, "R": self.get_rook_moves,
                                  "K": self.get_king_moves, "N": self.get_knight_moves,
                                  "Q": self.get_queen_moves, "B": self.get_bishop_moves}
+        self.check_mate = False
         self.current_valid_moves = self.get_valid_moves()
 
     """
-    Takes a Move as a parameter and executes it (will not work for castling, pawn promotion, and en-passant"""
+    Takes a Move as a parameter and executes it"""
     def do_move(self, move):
         self.board[move.start_row][move.start_col] = "--"
         if move.en_passant is not None:
             self.board[move.en_passant[0]][move.en_passant[1]] = "--"
+        if move.piece_moved[1] in ("K", "R"):
+            self.castling_work(move)
         self.board[move.end_row][move.end_col] = move.piece_moved
         self.move_log.append(move)
+
         # Pawn promotion
         if move.piece_moved[1] == "P" and move.end_row == 0 and self.white_to_move:  # White pawn promote
             self.pawn_promote = True
@@ -36,29 +45,126 @@ class ChessEngine:
         elif move.piece_moved[1] == "P" and move.end_row == 7 and not self.white_to_move:  # Black pawn promote
             self.pawn_promote = True
             return
+
         self.white_to_move = not self.white_to_move
         self.current_valid_moves = self.get_valid_moves()
+        if len(self.current_valid_moves) == 0:  # When a pawn promotes test to make sure check works properly and doesn't break
+            self.check_mate = True
 
-    """
-    Undo the last move made"""
+
     def undo_move(self):
-        if len(self.move_log):
+        if len(self.move_log) > 0:
             last_move = self.move_log.pop()
+            self.white_to_move = not self.white_to_move
             self.board[last_move.start_row][last_move.start_col] = last_move.piece_moved
             if last_move.en_passant is not None:
                 self.board[last_move.en_passant[0]][last_move.en_passant[1]] = last_move.piece_captured
                 self.board[last_move.end_row][last_move.end_col] = last_move.piece_captured = "--"
             else:
                 self.board[last_move.end_row][last_move.end_col] = last_move.piece_captured
-            self.white_to_move = not self.white_to_move
+            if last_move.piece_moved[1] in ("K", "R"):
+                self.castling_work(last_move, undo=True)
+
             self.current_valid_moves = self.get_valid_moves()
 
     """
-    Promotes a pawn to the piece chosen"""
+        Promotes a pawn to the piece chosen"""
+
     def promote(self, pawn_sq, piece_wanted):
         turn = self.board[pawn_sq[0]][pawn_sq[1]][0]
         self.board[pawn_sq[0]][pawn_sq[1]] = turn + piece_wanted
         print("Piece promoted!")
+
+    def castling_work(self, move, undo=False):
+        if move.piece_moved[1] == "R":  # Disable castling for a colors side if the rook moved.
+            if undo:
+                if self.white_to_move:
+                    if self.castling["W_King_Side_Regain_Castle"] is not None and len(self.move_log) <= self.castling["W_King_Side_Regain_Castle"] and self.castling["W_Undo_Regain_Castle"] is None:
+                        self.castling["W_King_Side"] = True
+                    if self.castling["W_Queen_Side_Regain_Castle"] is not None and len(self.move_log) <= self.castling["W_Queen_Side_Regain_Castle"] and self.castling["W_Undo_Regain_Castle"] is None:
+                        self.castling["W_Queen_Side"] = True
+                else:
+                    if self.castling["B_King_Side_Regain_Castle"] is not None and len(self.move_log) <= self.castling["B_King_Side_Regain_Castle"] and self.castling["B_Undo_Regain_Castle"] is None:
+                        self.castling["B_King_Side"] = True
+                    if self.castling["B_Queen_Side_Regain_Castle"] is not None and len(self.move_log) <= self.castling["B_Queen_Side_Regain_Castle"] and self.castling["B_Undo_Regain_Castle"] is None:
+                        self.castling["B_Queen_Side"] = True
+            else:
+                if self.white_to_move:
+                    if move.start_sq == (7, 7):
+                        self.castling["W_King_Side"] = False
+                        self.castling["W_King_Side_Regain_Castle"] = len(self.move_log)
+                    elif move.start_sq == (7, 0):
+                        self.castling["W_Queen_Side"] = False
+                        self.castling["W_Queen_Side_Regain_Castle"] = len(self.move_log)
+                else:
+                    if move.start_sq == (0, 7):
+                        self.castling["B_King_Side"] = False
+                        self.castling["B_King_Side_Regain_Castle"] = len(self.move_log)
+                    elif move.start_sq == (0, 0):
+                        self.castling["B_Queen_Side"] = False
+                        self.castling["B_Queen_Side_Regain_Castle"] = len(self.move_log)
+
+        elif move.piece_moved[1] == "K":
+            if move.castle is None:  # If king moved, and it's not a castle type move we need to disable castling for that color.
+                if undo:
+                    if self.white_to_move:
+                        if len(self.move_log) == self.castling["W_Undo_Regain_Castle"]:  # To regain the right to castle with an undo move. The player needs to undo the first move that their king moved on.
+                            self.castling["W_King_Side"] = True
+                            self.castling["W_Queen_Side"] = True
+                    else:
+                        if len(self.move_log) == self.castling["B_Undo_Regain_Castle"]:
+                            self.castling["B_King_Side"] = True
+                            self.castling["B_Queen_Side"] = True
+                else:
+                    if self.white_to_move:
+                        self.castling["W_King_Side"] = False
+                        self.castling["W_Queen_Side"] = False
+                        if self.castling["W_Undo_Regain_Castle"] is None:  # We set this variables so a player can't undo a king move at any point of the game to regain castling.
+                            self.castling["W_Undo_Regain_Castle"] = len(self.move_log)
+                    else:
+                        self.castling["B_King_Side"] = False
+                        self.castling["B_Queen_Side"] = False
+                        if self.castling["B_Undo_Regain_Castle"] is None:
+                            self.castling["B_Undo_Regain_Castle"] = len(self.move_log)
+            else:  # If the king move was a castle.
+                if undo:
+                    self.board[move.rook_start_sq[0]][move.rook_start_sq[1]] = move.piece_captured
+                    self.board[move.end_row][move.end_col] = "--"
+                    self.board[move.rook_end_sq[0]][move.rook_end_sq[1]] = "--"
+                    if self.white_to_move:
+                        self.castling["W_King_Side"] = True
+                        self.castling["W_Queen_Side"] = True
+                    else:
+                        self.castling["B_King_Side"] = True
+                        self.castling["B_Queen_Side"] = True
+                else:
+                    self.board[move.castle[0][0]][move.castle[0][1]] = "--"
+                    self.board[move.castle[1][0]][move.castle[1][1]] = move.piece_captured
+
+                    if self.white_to_move:
+                        self.castling["W_King_Side"] = False
+                        self.castling["W_Queen_Side"] = False
+                    else:
+                        self.castling["B_King_Side"] = False
+                        self.castling["B_Queen_Side"] = False
+
+    def determine_valid_castle(self, move, enemy_move, currently_in_check):
+        if currently_in_check:  # If we are in check immediately return False since the king cannot castle out of check.
+            return False
+
+        # Determine if the castle is queen side of king side
+        if move.end_col - move.start_col == 2:  # King side
+            for vector in self.king_side_vector_scans:
+                if enemy_move.end_sq == (move.start_row + vector[0], move.start_col + vector[1]):
+                    return False
+            else:
+                return True
+        elif move.end_col - move.start_col == -2:  # Queen side
+            for vector in self.queen_side_vector_scans:
+                if enemy_move.end_sq == (move.start_row + vector[0], move.start_col + vector[1]):
+                    return False
+            else:
+                return True
 
     """
     Will determine all valid moves considering king check"""
@@ -73,25 +179,34 @@ class ChessEngine:
                     if board[i][j] == turn + "K":
                         return i, j
 
-        moves = self.get_all_possible_moves(self.board, self.white_to_move)
-        valid_non_king_capture_moves = []
-        valid_non_check_moves = []
+        possible_moves = self.get_all_possible_moves(self.board, self.white_to_move)
+        filtered_non_king_capture_moves = []
+        filtered_self_check_moves = []
+
         if self.white_to_move:
             our_turn = "w"
             opposing_turn = "b"
         else:
             our_turn = "b"
-            opposing_turn = "b"
+            opposing_turn = "w"
 
-        # Clear our moves that capture opposing king
+        # Clear our possible_moves that capture opposing king
         opposing_king_sq = get_king_square(opposing_turn, self.board)
-        for move in moves:
+        for move in possible_moves:
             if move.end_row == opposing_king_sq[0] and move.end_col == opposing_king_sq[1]:
                 pass
             else:
-                valid_non_king_capture_moves.append(move)
+                filtered_non_king_capture_moves.append(move)
 
-        for move in valid_non_king_capture_moves: # Clear out moves that will put current turn's king in check
+        current_king_sq = get_king_square(our_turn, self.board)
+        for enemy_move in self.get_all_possible_moves(self.board, not self.white_to_move):
+            if enemy_move.end_sq == current_king_sq:
+                currently_in_check = True
+                break
+        else:
+            currently_in_check = False
+
+        for move in filtered_non_king_capture_moves:  # Clear out moves that will put current turn's king in check
             board = copy.deepcopy(self.board)
             board[move.start_row][move.start_col] = "--"
             board[move.end_row][move.end_col] = move.piece_moved
@@ -100,9 +215,12 @@ class ChessEngine:
             for enemy_move in enemy_moves_next_turn:
                 if enemy_move.end_row == current_king_sq[0] and enemy_move.end_col == current_king_sq[1]:
                     break
+                if move.castle is not None:  # Check if our castle squares are occupied by this move.
+                    if not self.determine_valid_castle(move, enemy_move, currently_in_check):
+                        break
             else:
-                valid_non_check_moves.append(move)
-        return valid_non_check_moves  # Temporary. Will check and remove moves that put the king in check later.
+                filtered_self_check_moves.append(move)
+        return filtered_self_check_moves
 
     """
     Will determine all possible moves not considering king check"""
@@ -194,6 +312,42 @@ class ChessEngine:
                     moves.append(Move((r, c), (dy, dx), board))
                 else:
                     pass
+
+        # Castling
+        # TODO: When doing future moves. Castling needs to be taken into account, seeing the ending position of the enemy king/enemy rooks
+        if self.white_to_move:
+            if self.castling["W_King_Side"]:
+                for vector in self.king_side_vector_scans:
+                    if c + vector[1] < len(board):
+                        if board[r + vector[0]][c + vector[1]] != "--":
+                            break
+                    else:
+                        break
+                else:
+                    moves.append(Move((r, c), (r, c + 2), board, castle=[(r, 7), (r, 5)]))
+            if self.castling["W_Queen_Side"]:
+                for vector in self.queen_side_vector_scans:
+                    if board[r + vector[0]][c + vector[1]] != "--":
+                        break
+                else:
+                    moves.append(Move((r, c), (r, c - 2), board, castle=[(r, 0), (r, 3)]))
+        else:
+            if self.castling["B_King_Side"]:
+                for vector in self.king_side_vector_scans:
+                    if c + vector[1] < len(board):
+                        if board[r + vector[0]][c + vector[1]] != "--":
+                            break
+                    else:
+                        break
+                else:
+                    moves.append(Move((r, c), (r, c + 2), board, castle=[(r, 7), (r, 5)]))
+            if self.castling["B_Queen_Side"]:
+                for vector in self.queen_side_vector_scans:
+                    if board[r + vector[0]][c + vector[1]] != "--":
+                        break
+                else:
+                    moves.append(Move((r, c), (r, c - 2), board, castle=[(r, 0), (r, 3)]))
+
         return moves
 
     def get_queen_moves(self, r, c, board):
@@ -333,6 +487,7 @@ class ChessEngine:
 
         return _moves
 
+
     def check_if_square_has_enemy_piece(self, start_sq, end_sq, board):
         # Function will soon acknowledge kings.
         start_r = start_sq[0]
@@ -360,7 +515,7 @@ class Move:
                    "e": 4, "f": 5, "g": 6, "h": 7}
     col_to_file = {v: k for k, v in file_to_col.items()}
 
-    def __init__(self, start_sq, end_sq, board, en_passant=None):
+    def __init__(self, start_sq, end_sq, board, en_passant=None, castle=None):
         self.start_sq = start_sq
         self.end_sq = end_sq
         self.start_row = start_sq[0]
@@ -368,10 +523,15 @@ class Move:
         self.end_row = end_sq[0]
         self.end_col = end_sq[1]
         self.en_passant = en_passant
+        self.castle = castle
 
         self.piece_moved = board[self.start_row][self.start_col]
         if en_passant is not None:
             self.piece_captured = board[en_passant[0]][en_passant[1]]
+        if castle is not None:
+            self.piece_captured = board[castle[0][0]][castle[0][1]]
+            self.rook_start_sq = self.castle[0]
+            self.rook_end_sq = self.castle[1]
         else:
             self.piece_captured = board[self.end_row][self.end_col]
         self.id = str(self.start_row * 1000 + self.start_col * 100 + self.end_row * 10 + self.end_col)
