@@ -152,7 +152,7 @@ def handle_move(start_sq, click, gs):
     for valid_move in gs.current_valid_moves:
         if move.id == valid_move.id:
             move_sound.play()
-            gs.do_move(move)
+            gs.do_move(valid_move)  # Feed valid_move into do_move() so we can get en_passant and castling variables.
             return True
     else:
         return False
@@ -283,6 +283,7 @@ def render_all_moves(screen, gs):
 def opposite_flipped_index(index):
     # 8 is the length of our board
     return 8 - index - 1
+
 
 if __name__ == "__main__":
     main()

@@ -8,7 +8,7 @@ class ChessEngine:
             ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
-            ["--", "--", "--", "--", "--", "--", "--", "--"],
+            ["--", "--", "--", "bP", "--", "--", "--", "--"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
             ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]
@@ -528,7 +528,7 @@ class Move:
         self.piece_moved = board[self.start_row][self.start_col]
         if en_passant is not None:
             self.piece_captured = board[en_passant[0]][en_passant[1]]
-        if castle is not None:
+        elif castle is not None:
             self.piece_captured = board[castle[0][0]][castle[0][1]]
             self.rook_start_sq = self.castle[0]
             self.rook_end_sq = self.castle[1]
