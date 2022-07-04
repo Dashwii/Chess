@@ -70,6 +70,7 @@ def main():
     start_sq = ()
     gs = ChessEngine()
     pawn_promote = PawnPromoteSelect()
+    mouse_button_held_down = False
     board_flipping = True
     board_flipping_was_on = False
     while running:
@@ -79,34 +80,26 @@ def main():
             if e.type == p.QUIT:
                 running = False
             if e.type == p.MOUSEBUTTONDOWN:
-                if not gs.pawn_promote:
-                    start_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
-                    # Prevent picking up pieces out of turn
-                    if len(start_sq) == 2:
-                        if gs.white_to_move and gs.board[start_sq[0]][start_sq[1]][0] != "w":
-                            start_sq = ()
-                        elif not gs.white_to_move and gs.board[start_sq[0]][start_sq[1]][0] != "b":
-                            start_sq = ()
-            elif e.type == p.MOUSEBUTTONUP and e.button == 1:
-                if not gs.pawn_promote and len(start_sq) == 2:
-                    end_sq = (click_sq_coordinates(board_flipping, gs.white_to_move))
-                    if len(end_sq) != 2:
-                        start_sq = ()
-                    else:
-                        if board_flipping and not gs.white_to_move:
-                            start_sq = (opposite_flipped_index(start_sq[0]), opposite_flipped_index(start_sq[1]))
-                            end_sq = (opposite_flipped_index(end_sq[0]), opposite_flipped_index(end_sq[1]))
-                        move = Move(start_sq, end_sq, gs.board)
-                        for i in gs.current_valid_moves:
-                            if move.id == i.id:
-                                if i.en_passant is not None:
-                                    move = i  # Turn the move into i, so we get the en_passant variables copied over
-                                move_sound.play()
-                                gs.do_move(move)
-                                start_sq = ()
-                                break
+                mouse_button_held_down = True
+                click = mouse_sq_coordinates(board_flipping, gs.white_to_move)
+                if len(click) == 2 and len(gs.current_valid_moves) > 0:
+                    # Make sure were clicking on a valid piece for our turn.
+                    if clicked_on_turn_piece(click, gs) or len(start_sq) == 2:
+                        if len(start_sq) == 2 and len(click) == 2:  # Our ending click is on a valid move for the piece
+                            handle_move(start_sq, click, gs)
+                            if clicked_on_turn_piece(click, gs):  # In case user clicked on another piece of their turn
+                                start_sq = click
                             else:
                                 start_sq = ()
+                        elif len(start_sq) == 0:  # We click on the piece we want to move
+                            start_sq = click
+            if e.type == p.MOUSEBUTTONUP:
+                mouse_button_held_down = False
+                click = mouse_sq_coordinates(board_flipping, gs.white_to_move)
+                if len(start_sq) == 2 and len(click) == 2 and click != start_sq:
+                    valid = handle_move(start_sq, click, gs)
+                    if valid:  # Make sure if the move went through we de-highlight our start_sq (Stops blue highlight from rendering into next turn)
+                        start_sq = ()
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z and len(start_sq) == 0:  # Prevent while dragging a piece
                     gs.undo_move()
@@ -137,7 +130,7 @@ def main():
 
 
         draw_board(screen, gs.board, start_sq, board_flipping, gs.white_to_move)
-        draw_pieces(screen, gs, start_sq, board_flipping, gs.white_to_move)
+        draw_pieces(screen, gs, start_sq, board_flipping, gs.white_to_move, mouse_button_held_down)
         screen.blit(current_turn_text, p.Rect(0, 40, 30, 30))
         if gs.white_to_move:
             screen.blit(white_text, p.Rect(0, 120, 30, 30))
@@ -146,17 +139,37 @@ def main():
         p.display.flip()
 
 
-def click_sq_coordinates(board_flipping, white_to_move):
+def clicked_on_turn_piece(click, gs):
+    if gs.board[click[0]][click[1]][0] == "w" and gs.white_to_move:
+        return True
+    elif gs.board[click[0]][click[1]][0] == "b" and not gs.white_to_move:
+        return True
+    return False
+
+
+def handle_move(start_sq, click, gs):
+    move = Move(start_sq, click, gs.board)
+    for valid_move in gs.current_valid_moves:
+        if move.id == valid_move.id:
+            move_sound.play()
+            gs.do_move(move)
+            return True
+    else:
+        return False
+
+
+def mouse_sq_coordinates(board_flipping, white_to_move):
     click_pos = p.mouse.get_pos()
     if BOARD_X < click_pos[0] < BOARD_X + BOARD_WIDTH:
         if BOARD_Y < click_pos[1] < BOARD_Y + BOARD_HEIGHT:  # Check if area player clicked is in the chess board
             if not board_flipping or white_to_move:
                 row_clicked = (click_pos[1] - BOARD_Y) // SQ_SIZE
                 col_clicked = (click_pos[0] - BOARD_X) // SQ_SIZE
+                return row_clicked, col_clicked
             elif board_flipping and not white_to_move:
-                row_clicked = (BOARD_Y - click_pos[1]) // SQ_SIZE
-                col_clicked = (BOARD_X - click_pos[0]) // SQ_SIZE
-            return row_clicked, col_clicked
+                row_clicked = opposite_flipped_index((click_pos[1] - BOARD_Y) // SQ_SIZE)
+                col_clicked = opposite_flipped_index((click_pos[0] - BOARD_X) // SQ_SIZE)
+                return row_clicked, col_clicked
         else:
             return ()
     else:
@@ -164,24 +177,33 @@ def click_sq_coordinates(board_flipping, white_to_move):
 
 
 def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move):
+    # When were drawing the board's squares. If the board is flipped, and we don't mirror the squares. The opposite square will draw
+    # over black's highlighted red square. There's two solutions. One option is sticking more conditionals to flip the board's
+    # squares to achieve the same effect but not draw over black's highlighted squares. The other option is to do another
+    # nested for loop to draw all highlighted squares and forget about the problem. For now, I've done the double nested for loop option.
     for i, r in enumerate(chess_board):
         for j, c in enumerate(r):
             if (i + j) % 2 == 0:
-                p.draw.rect(screen, "white", p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+                if not board_flipping or white_to_move:
+                    p.draw.rect(screen, "white", p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+                elif board_flipping and not white_to_move:
+                    p.draw.rect(screen, "white",
+                                p.Rect(BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), (BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
             else:
                 p.draw.rect(screen, "dark green", p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
-            if len(start_sq) > 0:
-                if not board_flipping or white_to_move:
-                    if i == start_sq[0] and j == start_sq[1] and chess_board[start_sq[0]][start_sq[1]] != "--":
+    for i, r in enumerate(chess_board):
+        for j, c in enumerate(r):
+            if len(start_sq) == 2:
+                if i == start_sq[0] and j == start_sq[1] and chess_board[start_sq[0]][start_sq[1]] != "--":
+                    if not board_flipping or white_to_move:
                         p.draw.rect(screen, "red",
                                     p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
-                elif board_flipping and not white_to_move:
-                    new_start_sq = (-1 * start_sq[0] - 1, -1 * start_sq[1] - 1)
-                    if i == new_start_sq[0] and j == new_start_sq[1] and chess_board[opposite_flipped_index(new_start_sq[0], neg_flip=False)][opposite_flipped_index(new_start_sq[1], neg_flip=False)] != "--":
-                        p.draw.rect(screen, "red", p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+                    elif board_flipping and not white_to_move:
+                        p.draw.rect(screen, "red",
+                                    p.Rect(BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), (BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
 
 
-def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move):
+def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_button_held_down):
     # Loop through every square in the board and see what square gives us a valid spot. Pretty bad algo but will work for now
     if not board_flipping or white_to_move:
         for i, r in enumerate(gs.board):
@@ -193,74 +215,74 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move):
                     else:
                         p.draw.circle(screen, "dark gray",
                                       (SQ_SIZE // 2 + BOARD_X + (j * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (i * SQ_SIZE)), 60, width=12)
+
     elif board_flipping and not white_to_move:
-        reversed_board = [list(reversed(row)) for row in reversed(gs.board)]
-        for i, r in enumerate(reversed_board):
+        for i, r in enumerate(gs.board):
             for j, c in enumerate(r):
-                if len(start_sq) and Move((opposite_flipped_index(start_sq[0]), opposite_flipped_index(start_sq[1])), (opposite_flipped_index(i, neg_flip=False), opposite_flipped_index(j, neg_flip=False)), reversed_board).id in [d.id for d in gs.current_valid_moves]:
-                    if reversed_board[i][j] == "--":
+                if len(start_sq) and Move((start_sq[0], start_sq[1]), (i, j), gs.board).id in [d.id for d in gs.current_valid_moves]:
+                    if gs.board[i][j] == "--":
                         p.draw.circle(screen, "dark gray",
-                                      (SQ_SIZE // 2 + BOARD_X + (j * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (i * SQ_SIZE)), 20)
+                                      (SQ_SIZE // 2 + BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), 20)
                     else:
                         p.draw.circle(screen, "dark gray",
-                                      (SQ_SIZE // 2 + BOARD_X + (j * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (i * SQ_SIZE)), 60, width=12)
+                                      (SQ_SIZE // 2 + BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), 60, width=12)
 
     # Render pieces on the board
     if not board_flipping or white_to_move:
         for i, r in enumerate(gs.board):
             for j, c in enumerate(r):
                 piece = gs.board[i][j]
-                if len(start_sq) > 0 and i == start_sq[0] and j == start_sq[1]:
+                if len(start_sq) == 2 and i == start_sq[0] and j == start_sq[1] and mouse_button_held_down:
                     pass
                 else:
                     if piece != "--":
                         screen.blit(IMAGES[piece], p.Rect(BOARD_X + (j * SQ_SIZE), BOARD_Y + (i * SQ_SIZE), SQ_SIZE, SQ_SIZE))
     elif board_flipping and not white_to_move:
-        reversed_board = [list(reversed(row)) for row in reversed(gs.board)]
-        for i, r in enumerate(reversed_board):
+        for i, r in enumerate(gs.board):
             for j, c in enumerate(r):
-                piece = reversed_board[i][j]
-                if len(start_sq) > 0 and i == (-1 * start_sq[0] - 1) and j == (-1 * start_sq[1] - 1):
+                piece = gs.board[i][j]
+                if len(start_sq) == 2 and i == start_sq[0] and j == start_sq[1] and mouse_button_held_down:
                     pass
                 else:
                     if piece != "--":
-                        screen.blit(IMAGES[piece], p.Rect(BOARD_X + (j * SQ_SIZE), BOARD_Y + (i * SQ_SIZE), SQ_SIZE, SQ_SIZE))
+                        screen.blit(IMAGES[piece], p.Rect(BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE), SQ_SIZE, SQ_SIZE))
 
-    # Drag piece render
-    if start_sq:
+    # Blue highlight
+    if len(start_sq) == 2:
+        square_highlight_pos = mouse_sq_coordinates(board_flipping, gs.white_to_move)
+        # We do this so if the player lets go of a piece and moves their mouse outside the board's space.
+        # The blue square highlight returns to the pieces spot. The code directly below makes sure that if the piece
+        # is dragged off board, the blue square highlights way off the screen.
+        if len(square_highlight_pos) == 0 and mouse_button_held_down:
+            square_highlight_pos = (1000, 1000)  # Make the blue highlight off-screen
         if not board_flipping or white_to_move:
-            piece = gs.board[start_sq[0]][start_sq[1]]  # Reverse column and row to get the actual piece we clicked on.
+            p.draw.rect(screen, "blue",
+                        p.Rect(BOARD_X + (square_highlight_pos[1] if mouse_button_held_down else start_sq[1]) * SQ_SIZE,
+                               BOARD_Y + (square_highlight_pos[0] if mouse_button_held_down else start_sq[0]) * SQ_SIZE, SQ_SIZE, SQ_SIZE), 6)  # Invert row and columns to get actual screen representation of highlight position.
         elif board_flipping and not white_to_move:
-            piece = gs.board[start_sq[0]][start_sq[1]]
+            p.draw.rect(screen, "blue", p.Rect(BOARD_X + (opposite_flipped_index(square_highlight_pos[1]) if mouse_button_held_down else opposite_flipped_index(start_sq[1])) * SQ_SIZE,
+                                               BOARD_Y + (opposite_flipped_index(square_highlight_pos[0]) if mouse_button_held_down else opposite_flipped_index(start_sq[0])) * SQ_SIZE,
+                                               SQ_SIZE, SQ_SIZE), 6)
+    # Drag piece render
+    if start_sq and mouse_button_held_down:
+        mouse_pos = p.mouse.get_pos()
+        piece = gs.board[start_sq[0]][start_sq[1]]
         if piece != "--":
-            mouse_pos = p.mouse.get_pos()
-            square_highlight_pos = click_sq_coordinates(board_flipping, gs.white_to_move)
-            if len(square_highlight_pos) > 0:
-                if not board_flipping or white_to_move:
-                    p.draw.rect(screen, "blue", p.Rect(BOARD_X + square_highlight_pos[1] * SQ_SIZE, BOARD_Y + square_highlight_pos[0] * SQ_SIZE, SQ_SIZE, SQ_SIZE), 6) # Invert row and columns to get actual screen representation of highlight position.
-                elif board_flipping and not white_to_move:
-                    # Add 1 to square_highlight_pos[0] due to the negative integers not being 0 index based. Adding 1 reduces the negative integer by 1. Which we'll multiply by -1 to make positive.
-                    p.draw.rect(screen, "blue", p.Rect(BOARD_X + (-1 * (square_highlight_pos[1] + 1)) * SQ_SIZE, BOARD_Y + (-1 * (square_highlight_pos[0] + 1)) * SQ_SIZE, SQ_SIZE, SQ_SIZE), 6)
             screen.blit(IMAGES[piece], p.Rect(mouse_pos[0] - SQ_SIZE // 2, mouse_pos[1] - SQ_SIZE // 2, SQ_SIZE, SQ_SIZE))
 
 
 def render_all_moves(screen, gs):
+    """
+    Not in use currently"""
     # Renders all possible moves at the current game state
     for move in gs.current_valid_moves:
         p.draw.circle(screen, "dark gray",
                       (SQ_SIZE // 2 + BOARD_X + (move.end_col * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (move.end_row * SQ_SIZE)), 20)
 
 
-def opposite_flipped_index(index, neg_flip=True):
-    if neg_flip:
-        # Convert negative flipped index to 0 base indexing.  Ex. -8 -> -7
-        index += 1
-
-        index *= -1
-
+def opposite_flipped_index(index):
     # 8 is the length of our board
     return 8 - index - 1
-
 
 if __name__ == "__main__":
     main()
