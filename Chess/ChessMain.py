@@ -164,12 +164,15 @@ def main():
                 elif len(end_pos_click) == 0:  # If user drags a piece off the board or on an unplayable square. Keep the square highlighted.
                     clicks = 0
             elif e.type == p.KEYDOWN:
-                if e.key == p.K_z and len(start_sq) == 0:  # Prevent while dragging a piece
+                if e.key == p.K_z and len(start_sq) == 0 and not gs.pawn_promote:  # Prevent while dragging a piece and while promoting a piece
                     gs.undo_move()
-                if e.key == p.K_f and len(start_sq) == 0:  # Prevent while dragging a piece
+                if e.key == p.K_f and len(start_sq) == 0 and not gs.pawn_promote:  # Prevent while dragging a piece and while promoting a piece
+                    if board_flipping:
+                        print("Board flipping off.")
+                    else:
+                        print("Board flipping on.")
                     board_flipping = not board_flipping
-                    print("Board flipping toggled.")
-                if e.key == p.K_p and len(start_sq) == 0:
+                if e.key == p.K_p and len(start_sq) == 0 and not gs.pawn_promote:
                     gs = ChessEngine()
                     print("Board reset.")
 
@@ -179,6 +182,8 @@ def main():
             start_sq = ()
             clicks = 0
 
+
+        screen.fill((64, 64, 64))
         if gs.pawn_promote:
             if board_flipping:
                 board_flipping = False  # Set board flipping to false for a second. We need to wait until user input on the piece to promote to.
@@ -195,8 +200,6 @@ def main():
                 if board_flipping_was_on:
                     board_flipping = True
                     board_flipping_was_on = False
-
-        screen.fill((64, 64, 64))
         draw_board(screen, gs.board, start_sq, board_flipping, gs.white_to_move)
         draw_pieces(screen, gs, start_sq, board_flipping, gs.white_to_move, mouse_button_held_down)
         screen.blit(current_turn_text, p.Rect(0, 40, 30, 30))
