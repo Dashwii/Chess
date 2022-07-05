@@ -117,6 +117,7 @@ def main():
     mouse_button_held_down = False
     board_flipping = True
     board_flipping_was_on = False
+    clicks = 0
     while running:
         CLOCK.tick(FPS)
         events = p.event.get()
@@ -130,25 +131,38 @@ def main():
                 running = False
             if e.type == p.MOUSEBUTTONDOWN:
                 mouse_button_held_down = True
-                click = mouse_sq_coordinates(board_flipping, gs.white_to_move)
-                if len(click) == 2 and len(gs.current_valid_moves) > 0:
+                end_pos_click = mouse_sq_coordinates(board_flipping, gs.white_to_move)
+                if len(end_pos_click) == 2 and len(gs.current_valid_moves) > 0:
                     # Make sure were clicking on a valid piece for our turn.
-                    if clicked_on_turn_piece(click, gs) or len(start_sq) == 2:
-                        if len(start_sq) == 2 and len(click) == 2:  # Our ending click is on a valid move for the piece
-                            handle_move(start_sq, click, gs)
-                            if clicked_on_turn_piece(click, gs):  # In case user clicked on another piece of their turn
-                                start_sq = click
-                            else:
+                    if clicked_on_turn_piece(end_pos_click, gs) or len(start_sq) == 2:
+                        if len(start_sq) == 2 and len(end_pos_click) == 2:  # Our ending click is on a valid move for the piece
+                            handle_move(start_sq, end_pos_click, gs)
+                            if clicked_on_turn_piece(end_pos_click, gs) and start_sq != end_pos_click:  # In case user clicked on another piece of their turn
+                                start_sq = end_pos_click
+                            elif end_pos_click == start_sq:
+                                clicks += 1
+                            else:  # If user plays on an invalid playable square.
                                 start_sq = ()
-                        elif len(start_sq) == 0:  # We click on the piece we want to move
-                            start_sq = click
+                                clicks = 0
+                        elif len(start_sq) == 0:  # We click on the starting piece we want to move
+                            start_sq = end_pos_click
+                            clicks += 1
+                else:
+                    start_sq = ()
+                    clicks = 0
+
             if e.type == p.MOUSEBUTTONUP:
                 mouse_button_held_down = False
-                click = mouse_sq_coordinates(board_flipping, gs.white_to_move)
-                if len(start_sq) == 2 and len(click) == 2 and click != start_sq:
-                    valid = handle_move(start_sq, click, gs)
+                end_pos_click = mouse_sq_coordinates(board_flipping, gs.white_to_move)
+                if len(start_sq) == 2 and len(end_pos_click) == 2 and end_pos_click != start_sq:
+                    valid = handle_move(start_sq, end_pos_click, gs)
                     if valid:  # Make sure if the move went through we de-highlight our start_sq (Stops blue highlight from rendering into next turn)
                         start_sq = ()
+                        clicks = 0  # Reset clicks for next turn.
+                    else:
+                        clicks = 0
+                elif len(end_pos_click) == 0:  # If user drags a piece off the board or on an unplayable square. Keep the square highlighted.
+                    clicks = 0
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z and len(start_sq) == 0:  # Prevent while dragging a piece
                     gs.undo_move()
@@ -158,6 +172,12 @@ def main():
                 if e.key == p.K_p and len(start_sq) == 0:
                     gs = ChessEngine()
                     print("Board reset.")
+
+        # This code makes clicks feel more responsive for de-highlighting a piece that was selected again.
+        # It allows us to drop a highlighted piece. But then pick it up again and drag if we want to make a move. Or let go again to de-highlight.
+        if clicks == 2 and not mouse_button_held_down:
+            start_sq = ()
+            clicks = 0
 
         if gs.pawn_promote:
             if board_flipping:
@@ -187,7 +207,6 @@ def main():
             screen.blit(black_text, p.Rect(0, 120, 30, 30))
 
         p.display.flip()
-
 
 def clicked_on_turn_piece(click, gs):
     if gs.board[click[0]][click[1]][0] == "w" and gs.white_to_move:
