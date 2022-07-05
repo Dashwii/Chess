@@ -56,6 +56,49 @@ class PawnPromoteSelect:
         return None
 
 
+class GameOver:
+    def __init__(self):
+        self.font = font
+        self.black_win = self.font.render("Black won the game!", True, "white")
+        self.white_win = self.font.render("White won the game!", True, "white")
+        self.stalemate = self.font.render("Stalemate", True, "white")
+
+    def draw_text(self, screen, condition):
+        if condition == "Black_Win":
+            x_align = WIDTH // 2 - self.black_win.get_width() // 2
+            y_align = HEIGHT // 2 - self.black_win.get_height() // 2
+            p.draw.rect(screen, "black", (x_align - 30, y_align - 30, self.black_win.get_width() + 60, self.black_win.get_height() + 60))
+            screen.blit(self.black_win, (x_align, y_align))
+
+        elif condition == "White_Win":
+            x_align = WIDTH // 2 - self.white_win.get_width() // 2
+            y_align = HEIGHT // 2 - self.white_win.get_height() // 2
+            p.draw.rect(screen, "black", (x_align - 30, y_align - 30, self.white_win.get_width() + 60, self.white_win.get_height() + 60))
+            screen.blit(self.white_win, (x_align, y_align))
+        elif condition == "Stalemate":
+            x_align = WIDTH // 2 - self.stalemate.get_width() // 2
+            y_align = HEIGHT // 2 - self.stalemate.get_height() // 2
+            p.draw.rect(screen, "black", (x_align - 30, y_align - 30, self.stalemate.get_width() + 60, self.stalemate.get_height() + 60))
+            screen.blit(self.stalemate, (x_align, y_align))
+
+        p.display.flip()
+
+    def game_loop(self, screen, gs):
+        while True:
+            for event in p.event.get():
+                if event.type == p.QUIT:
+                    p.display.quit()
+                if event.type == p.MOUSEBUTTONDOWN:
+                    return
+
+            if gs.winner == "Black":
+                self.draw_text(screen, "Black_Win")
+            elif gs.winner == "White":
+                self.draw_text(screen, "White_Win")
+            else:
+                self.draw_text(screen, "Stalemate")
+
+
 def load_images():
     # Load images once into a dictionary for later access.
     pieces = ["bR", "bN", "bB", "bQ", "bK", "bP", "wR", "wN", "wB", "wQ", "wK", "wP"]
@@ -69,6 +112,7 @@ def main():
     screen = p.display.set_mode((WIDTH, HEIGHT))
     start_sq = ()
     gs = ChessEngine()
+    game_over = GameOver()
     pawn_promote = PawnPromoteSelect()
     mouse_button_held_down = False
     board_flipping = True
@@ -76,6 +120,11 @@ def main():
     while running:
         CLOCK.tick(FPS)
         events = p.event.get()
+
+        if gs.checkmate or gs.stalemate:
+            game_over.game_loop(screen, gs)
+            gs = ChessEngine()  # Once game_over.game_loop() returns, restart the game.
+
         for e in events:
             if e.type == p.QUIT:
                 running = False
@@ -110,7 +159,6 @@ def main():
                     gs = ChessEngine()
                     print("Board reset.")
 
-        screen.fill((64, 64, 64))
         if gs.pawn_promote:
             if board_flipping:
                 board_flipping = False  # Set board flipping to false for a second. We need to wait until user input on the piece to promote to.
@@ -128,14 +176,16 @@ def main():
                     board_flipping = True
                     board_flipping_was_on = False
 
-
+        screen.fill((64, 64, 64))
         draw_board(screen, gs.board, start_sq, board_flipping, gs.white_to_move)
         draw_pieces(screen, gs, start_sq, board_flipping, gs.white_to_move, mouse_button_held_down)
         screen.blit(current_turn_text, p.Rect(0, 40, 30, 30))
+
         if gs.white_to_move:
             screen.blit(white_text, p.Rect(0, 120, 30, 30))
         else:
             screen.blit(black_text, p.Rect(0, 120, 30, 30))
+
         p.display.flip()
 
 

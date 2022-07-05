@@ -8,7 +8,7 @@ class ChessEngine:
             ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
-            ["--", "--", "--", "bP", "--", "--", "--", "--"],
+            ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
             ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]
@@ -24,7 +24,9 @@ class ChessEngine:
         self.piece_moves_func = {"P": self.get_pawn_moves, "R": self.get_rook_moves,
                                  "K": self.get_king_moves, "N": self.get_knight_moves,
                                  "Q": self.get_queen_moves, "B": self.get_bishop_moves}
-        self.check_mate = False
+        self.checkmate = False
+        self.stalemate = False
+        self.winner = None
         self.current_valid_moves = self.get_valid_moves()
 
     """
@@ -48,8 +50,22 @@ class ChessEngine:
 
         self.white_to_move = not self.white_to_move
         self.current_valid_moves = self.get_valid_moves()
-        if len(self.current_valid_moves) == 0:  # When a pawn promotes test to make sure check works properly and doesn't break
-            self.check_mate = True
+
+        # Determine if were in checkmate or game is a draw.
+        if self.white_to_move:
+            check = self.check_king_in_check(self.get_king_square("w", self.board))
+        else:
+            check = self.check_king_in_check(self.get_king_square("b", self.board))
+
+        if len(self.current_valid_moves) == 0 and check:
+            self.checkmate = True
+            # Get previous turn before turns flipped.
+            if self.white_to_move:
+                self.winner = "Black"
+            else:
+                self.winner = "White"
+        elif len(self.current_valid_moves) == 0 and not check:
+            self.stalemate = True
 
 
     def undo_move(self):
@@ -65,6 +81,12 @@ class ChessEngine:
             if last_move.piece_moved[1] in ("K", "R"):
                 self.castling_work(last_move, undo=True)
 
+            # Reset state variables
+            if self.checkmate:
+                self.checkmate = False
+            elif self.stalemate:
+                self.stalemate = False
+
             self.current_valid_moves = self.get_valid_moves()
 
     """
@@ -74,6 +96,7 @@ class ChessEngine:
         turn = self.board[pawn_sq[0]][pawn_sq[1]][0]
         self.board[pawn_sq[0]][pawn_sq[1]] = turn + piece_wanted
         print("Piece promoted!")
+
 
     def castling_work(self, move, undo=False):
         if move.piece_moved[1] == "R":  # Disable castling for a colors side if the rook moved.
@@ -167,17 +190,28 @@ class ChessEngine:
                 return True
 
     """
+    Get the current square the king were searching for is on"""
+    def get_king_square(self, turn, board):
+        for i, row in enumerate(board):
+            for j, col in enumerate(row):
+                if board[i][j] == turn + "K":
+                    return i, j
+
+    """
+    Check if the king were searching for is in check"""
+    def check_king_in_check(self, current_king_sq):
+        for enemy_move in self.get_all_possible_moves(self.board, not self.white_to_move):
+            if enemy_move.end_sq == current_king_sq:
+                return True
+        else:
+            return False
+
+    """
     Will determine all valid moves considering king check"""
     def get_valid_moves(self):
         # Function will first filter moves that capture the enemy king.
         # Function will then simulate remaining moves and get opposing teams next turn moves.
         # If any piece from the enemy puts our king in check. Filter out the move.
-
-        def get_king_square(turn, board):
-            for i, row in enumerate(board):
-                for j, col in enumerate(row):
-                    if board[i][j] == turn + "K":
-                        return i, j
 
         possible_moves = self.get_all_possible_moves(self.board, self.white_to_move)
         filtered_non_king_capture_moves = []
@@ -191,26 +225,21 @@ class ChessEngine:
             opposing_turn = "w"
 
         # Clear our possible_moves that capture opposing king
-        opposing_king_sq = get_king_square(opposing_turn, self.board)
+        opposing_king_sq = self.get_king_square(opposing_turn, self.board)
         for move in possible_moves:
             if move.end_row == opposing_king_sq[0] and move.end_col == opposing_king_sq[1]:
                 pass
             else:
                 filtered_non_king_capture_moves.append(move)
 
-        current_king_sq = get_king_square(our_turn, self.board)
-        for enemy_move in self.get_all_possible_moves(self.board, not self.white_to_move):
-            if enemy_move.end_sq == current_king_sq:
-                currently_in_check = True
-                break
-        else:
-            currently_in_check = False
+        current_king_sq = self.get_king_square(our_turn, self.board)
+        currently_in_check = self.check_king_in_check(current_king_sq)
 
         for move in filtered_non_king_capture_moves:  # Clear out moves that will put current turn's king in check
             board = copy.deepcopy(self.board)
             board[move.start_row][move.start_col] = "--"
             board[move.end_row][move.end_col] = move.piece_moved
-            current_king_sq = get_king_square(our_turn, board)
+            current_king_sq = self.get_king_square(our_turn, board)
             enemy_moves_next_turn = self.get_all_possible_moves(board, not self.white_to_move)
             for enemy_move in enemy_moves_next_turn:
                 if enemy_move.end_row == current_king_sq[0] and enemy_move.end_col == current_king_sq[1]:
@@ -258,7 +287,8 @@ class ChessEngine:
 
         # Search for every column above the pawn. If nothing is blocking then it's a valid move.
         if turn == "w":  # Go up the column from whites perspective
-            if r == 6 and board[r - 2][c] == "--":
+            # Two space move
+            if r == 6 and board[r - 1][c] == "--" and board[r - 2][c] == "--":
                 moves.append(Move((r, c), (r - 2, c), board))
             if 0 <= r - 1 and board[r - 1][c] == "--":
                 moves.append(Move((r, c), (r - 1, c), board))
@@ -275,7 +305,8 @@ class ChessEngine:
                     moves.append(Move((r, c), (r - 1, c + 1), board, en_passant=(r, c + 1)))
 
         else:
-            if r == 1 and board[r + 2][c] == "--":
+            # Two space move
+            if r == 1 and board[r + 1][c] == "--" and board[r + 2][c] == "--":
                 moves.append(Move((r, c), (r + 2, c), board))
             if r + 1 < len(board) and board[r + 1][c] == "--":  # Go down the column from whites perspective
                 moves.append(Move((r, c), (r + 1, c), board))
