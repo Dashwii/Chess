@@ -182,7 +182,6 @@ def main():
             start_sq = ()
             clicks = 0
 
-
         screen.fill((64, 64, 64))
         if gs.pawn_promote:
             if board_flipping:
@@ -200,7 +199,8 @@ def main():
                 if board_flipping_was_on:
                     board_flipping = True
                     board_flipping_was_on = False
-        draw_board(screen, gs.board, start_sq, board_flipping, gs.white_to_move)
+
+        draw_board(screen, gs.board, start_sq, board_flipping, gs.white_to_move, gs.move_log)
         draw_pieces(screen, gs, start_sq, board_flipping, gs.white_to_move, mouse_button_held_down)
         screen.blit(current_turn_text, p.Rect(0, 40, 30, 30))
 
@@ -210,6 +210,7 @@ def main():
             screen.blit(black_text, p.Rect(0, 120, 30, 30))
 
         p.display.flip()
+
 
 def clicked_on_turn_piece(click, gs):
     if gs.board[click[0]][click[1]][0] == "w" and gs.white_to_move:
@@ -248,7 +249,7 @@ def mouse_sq_coordinates(board_flipping, white_to_move):
         return ()
 
 
-def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move):
+def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move, move_log):
     # When were drawing the board's squares. If the board is flipped, and we don't mirror the squares. The opposite square will draw
     # over black's highlighted red square. There's two solutions. One option is sticking more conditionals to flip the board's
     # squares to achieve the same effect but not draw over black's highlighted squares. The other option is to do another
@@ -263,8 +264,16 @@ def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move):
                                 p.Rect(BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), (BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
             else:
                 p.draw.rect(screen, "dark green", p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+
+    # Last move squares. Get a transparent surface for us to render
+    alpha_sq_surface = p.Surface((SQ_SIZE, SQ_SIZE))
+    alpha_sq_surface.set_alpha(150)
+    alpha_sq_surface.fill("yellow")
+
+    # Square highlighting
     for i, r in enumerate(chess_board):
         for j, c in enumerate(r):
+            # Start square highlighting
             if len(start_sq) == 2:
                 if i == start_sq[0] and j == start_sq[1] and chess_board[start_sq[0]][start_sq[1]] != "--":
                     if not board_flipping or white_to_move:
@@ -273,6 +282,20 @@ def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move):
                     elif board_flipping and not white_to_move:
                         p.draw.rect(screen, "red",
                                     p.Rect(BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), (BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+            # Last move highlighting
+            if len(move_log) > 0:
+                if not board_flipping or white_to_move:
+                    if (i, j) == move_log[-1].start_sq:
+                        screen.blit(alpha_sq_surface, (BOARD_X + j * SQ_SIZE, BOARD_Y + i * SQ_SIZE))
+                    elif (i, j) == move_log[-1].end_sq:
+                        screen.blit(alpha_sq_surface, (BOARD_X + j * SQ_SIZE, BOARD_Y + i * SQ_SIZE))
+                elif board_flipping and not white_to_move:
+                    if (i, j) == move_log[-1].start_sq:
+                        screen.blit(alpha_sq_surface, (BOARD_X + opposite_flipped_index(j) * SQ_SIZE,
+                                                       BOARD_Y + opposite_flipped_index(i) * SQ_SIZE))
+                    elif (i, j) == move_log[-1].end_sq:
+                        screen.blit(alpha_sq_surface, (BOARD_X + opposite_flipped_index(j) * SQ_SIZE,
+                                                       BOARD_Y + opposite_flipped_index(i) * SQ_SIZE))
 
 
 def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_button_held_down):
