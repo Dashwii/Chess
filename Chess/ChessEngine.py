@@ -41,6 +41,7 @@ class ChessEngine:
         self.move_log.append(move)
 
         # Pawn promotion
+        # If a pawn_promotion is eligible return out early. Once we get input we'll update our moves and the turn. (May need to break this function up to check for checkmates as well after pawn_promotion)
         if move.piece_moved[1] == "P" and move.end_row == 0 and self.white_to_move:  # White pawn promote
             self.pawn_promote = True
             return
@@ -48,25 +49,7 @@ class ChessEngine:
             self.pawn_promote = True
             return
 
-        self.white_to_move = not self.white_to_move
-        self.current_valid_moves = self.get_valid_moves()
-
-        # Determine if were in checkmate or game is a draw.
-        if self.white_to_move:
-            check = self.check_king_in_check(self.get_king_square("w", self.board))
-        else:
-            check = self.check_king_in_check(self.get_king_square("b", self.board))
-
-        if len(self.current_valid_moves) == 0 and check:
-            self.checkmate = True
-            # Get previous turn before turns flipped.
-            if self.white_to_move:
-                self.winner = "Black"
-            else:
-                self.winner = "White"
-        elif len(self.current_valid_moves) == 0 and not check:
-            self.stalemate = True
-
+        self.next_turn_work()
 
     def undo_move(self):
         if len(self.move_log) > 0:
@@ -88,6 +71,31 @@ class ChessEngine:
                 self.stalemate = False
 
             self.current_valid_moves = self.get_valid_moves()
+
+    """
+    Work that needs to be done on a new turn."""
+    def next_turn_work(self):
+        if self.pawn_promote:
+            self.pawn_promote = False
+
+        self.white_to_move = not self.white_to_move
+        self.current_valid_moves = self.get_valid_moves()
+
+        # Determine if were in checkmate or game is a draw.
+        if self.white_to_move:
+            check = self.check_king_in_check(self.get_king_square("w", self.board))
+        else:
+            check = self.check_king_in_check(self.get_king_square("b", self.board))
+
+        if len(self.current_valid_moves) == 0 and check:
+            self.checkmate = True
+            # Get previous turn before turns flipped.
+            if self.white_to_move:
+                self.winner = "Black"
+            else:
+                self.winner = "White"
+        elif len(self.current_valid_moves) == 0 and not check:
+            self.stalemate = True
 
     """
         Promotes a pawn to the piece chosen"""

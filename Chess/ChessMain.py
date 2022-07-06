@@ -1,5 +1,5 @@
 import pygame as p
-from ChessEngine import ChessEngine, Move
+from ChessEngine import ChessEngine, Move, copy
 
 p.init()
 p.mixer.init()
@@ -27,6 +27,7 @@ class PawnPromoteSelect:
         self.rook_box = p.Rect(1600, self.padding * 2 + 228, 128, 128)
         self.knight_box = p.Rect(1600, self.padding * 3 + 356, 128, 128)
         self.bishop_box = p.Rect(1600, self.padding * 4 + 484, 128, 128)
+        self.selected_promotion = None
 
     def render_images(self, screen, white_to_move):
         if white_to_move:
@@ -41,18 +42,19 @@ class PawnPromoteSelect:
         screen.blit(IMAGES[current_turn + "N"], self.knight_box)
         screen.blit(IMAGES[current_turn + "B"], self.bishop_box)
 
-    def get_input(self, events):
+    def game_loop(self, screen, white_to_move, events):
         for event in events:
             if event.type == p.MOUSEBUTTONDOWN:
                 pos = p.mouse.get_pos()
                 if self.queen_box.collidepoint(pos):
-                    return "Q"
+                    self.selected_promotion = "Q"
                 elif self.rook_box.collidepoint(pos):
-                    return "R"
+                    self.selected_promotion = "R"
                 elif self.knight_box.collidepoint(pos):
-                    return "N"
+                    self.selected_promotion = "N"
                 elif self.bishop_box.collidepoint(pos):
-                    return "B"
+                    self.selected_promotion = "B"
+        self.render_images(screen, white_to_move)
         return None
 
 
@@ -62,6 +64,8 @@ class GameOver:
         self.black_win = self.font.render("Black won the game!", True, "white")
         self.white_win = self.font.render("White won the game!", True, "white")
         self.stalemate = self.font.render("Stalemate", True, "white")
+        self.restart = False
+        self.mouse_down_event_count = 0
 
     def draw_text(self, screen, condition):
         if condition == "Black_Win":
@@ -81,22 +85,21 @@ class GameOver:
             p.draw.rect(screen, "black", (x_align - 30, y_align - 30, self.stalemate.get_width() + 60, self.stalemate.get_height() + 60))
             screen.blit(self.stalemate, (x_align, y_align))
 
-        p.display.flip()
-
-    def game_loop(self, screen, gs):
-        while True:
-            for event in p.event.get():
-                if event.type == p.QUIT:
-                    p.display.quit()
-                if event.type == p.MOUSEBUTTONDOWN:
-                    return
-
-            if gs.winner == "Black":
-                self.draw_text(screen, "Black_Win")
-            elif gs.winner == "White":
-                self.draw_text(screen, "White_Win")
-            else:
-                self.draw_text(screen, "Stalemate")
+    def game_loop(self, screen, gs, events):
+        for event in events:
+            if event.type == p.QUIT:
+                p.display.quit()
+            if event.type == p.MOUSEBUTTONDOWN:
+                self.mouse_down_event_count += 1
+                if self.mouse_down_event_count == 2:
+                    self.mouse_down_event_count = 0
+                    self.restart = True
+        if gs.winner == "Black":
+            self.draw_text(screen, "Black_Win")
+        elif gs.winner == "White":
+            self.draw_text(screen, "White_Win")
+        else:
+            self.draw_text(screen, "Stalemate")
 
 
 def load_images():
@@ -114,6 +117,7 @@ def main():
     gs = ChessEngine()
     game_over = GameOver()
     pawn_promote = PawnPromoteSelect()
+    animations = AnimationHandler()
     mouse_button_held_down = False
     board_flipping = True
     board_flipping_was_on = False
@@ -121,22 +125,17 @@ def main():
     while running:
         CLOCK.tick(FPS)
         events = p.event.get()
-
-        if gs.checkmate or gs.stalemate:
-            game_over.game_loop(screen, gs)
-            gs = ChessEngine()  # Once game_over.game_loop() returns, restart the game.
-
         for e in events:
             if e.type == p.QUIT:
                 running = False
             if e.type == p.MOUSEBUTTONDOWN:
                 mouse_button_held_down = True
                 end_pos_click = mouse_sq_coordinates(board_flipping, gs.white_to_move)
-                if len(end_pos_click) == 2 and len(gs.current_valid_moves) > 0:
+                if len(end_pos_click) == 2 and len(gs.current_valid_moves) > 0 and not gs.pawn_promote:
                     # Make sure were clicking on a valid piece for our turn.
                     if clicked_on_turn_piece(end_pos_click, gs) or len(start_sq) == 2:
                         if len(start_sq) == 2 and len(end_pos_click) == 2:  # Our ending click is on a valid move for the piece
-                            handle_move(start_sq, end_pos_click, gs)
+                            handle_move(start_sq, end_pos_click, gs, animations)
                             if clicked_on_turn_piece(end_pos_click, gs) and start_sq != end_pos_click:  # In case user clicked on another piece of their turn
                                 start_sq = end_pos_click
                             elif end_pos_click == start_sq:
@@ -155,7 +154,7 @@ def main():
                 mouse_button_held_down = False
                 end_pos_click = mouse_sq_coordinates(board_flipping, gs.white_to_move)
                 if len(start_sq) == 2 and len(end_pos_click) == 2 and end_pos_click != start_sq:
-                    valid = handle_move(start_sq, end_pos_click, gs)
+                    valid = handle_move(start_sq, end_pos_click, gs, None)
                     if valid:  # Make sure if the move went through we de-highlight our start_sq (Stops blue highlight from rendering into next turn)
                         start_sq = ()
                         clicks = 0  # Reset clicks for next turn.
@@ -183,31 +182,34 @@ def main():
             clicks = 0
 
         screen.fill((64, 64, 64))
-        if gs.pawn_promote:
-            if board_flipping:
-                board_flipping = False  # Set board flipping to false for a second. We need to wait until user input on the piece to promote to.
-                board_flipping_was_on = True
-            promote_turn = gs.white_to_move  # Get the opposite turn as that's the pawn belonging to the promotion. gs always flicked the next turn.
-            pawn_promote.render_images(screen, promote_turn)
-            promotion = pawn_promote.get_input(events)
-            if promotion:
-                pawn_sq = gs.move_log[-1].end_sq
-                gs.promote(pawn_sq, promotion)
-                gs.pawn_promote = False
-                gs.white_to_move = not gs.white_to_move
-                gs.current_valid_moves = gs.get_valid_moves()
-                if board_flipping_was_on:
-                    board_flipping = True
-                    board_flipping_was_on = False
 
-        draw_board(screen, gs.board, start_sq, board_flipping, gs.white_to_move, gs.move_log)
-        draw_pieces(screen, gs, start_sq, board_flipping, gs.white_to_move, mouse_button_held_down)
+        draw_board(screen, gs, start_sq, board_flipping, gs.white_to_move, gs.move_log)
+        draw_pieces(screen, gs, start_sq, board_flipping, gs.white_to_move, mouse_button_held_down, animations)
         screen.blit(current_turn_text, p.Rect(0, 40, 30, 30))
 
+        animations.update_animations(screen, board_flipping, gs.white_to_move)
+
+        # Draw current turn
         if gs.white_to_move:
             screen.blit(white_text, p.Rect(0, 120, 30, 30))
         else:
             screen.blit(black_text, p.Rect(0, 120, 30, 30))
+
+        if gs.pawn_promote:
+            pawn_promote.game_loop(screen, gs.white_to_move, events)
+            if pawn_promote.selected_promotion:
+                gs.promote(gs.move_log[-1].end_sq, pawn_promote.selected_promotion)
+                pawn_promote.selected_promotion = None
+                gs.next_turn_work()
+                if board_flipping_was_on:
+                    board_flipping = True
+                    board_flipping_was_on = False
+
+        if gs.checkmate or gs.stalemate:
+            game_over.game_loop(screen, gs, events)
+            if game_over.restart:
+                gs = ChessEngine()  # Once game_over.game_loop() returns, restart the game.
+                game_over.restart = False
 
         p.display.flip()
 
@@ -220,11 +222,14 @@ def clicked_on_turn_piece(click, gs):
     return False
 
 
-def handle_move(start_sq, click, gs):
+def handle_move(start_sq, click, gs, animations):
     move = Move(start_sq, click, gs.board)
     for valid_move in gs.current_valid_moves:
         if move.id == valid_move.id:
-            move_sound.play()
+            if animations is not None:
+                animations.add_animation(move)
+            else:
+                move_sound.play()  # move_sound.play() now here for when a piece is dragged and placed instead of an animation.
             gs.do_move(valid_move)  # Feed valid_move into do_move() so we can get en_passant and castling variables.
             return True
     else:
@@ -249,12 +254,12 @@ def mouse_sq_coordinates(board_flipping, white_to_move):
         return ()
 
 
-def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move, move_log):
+def draw_board(screen, gs, start_sq, board_flipping, white_to_move, move_log):
     # When were drawing the board's squares. If the board is flipped, and we don't mirror the squares. The opposite square will draw
     # over black's highlighted red square. There's two solutions. One option is sticking more conditionals to flip the board's
     # squares to achieve the same effect but not draw over black's highlighted squares. The other option is to do another
     # nested for loop to draw all highlighted squares and forget about the problem. For now, I've done the double nested for loop option.
-    for i, r in enumerate(chess_board):
+    for i, r in enumerate(gs.board):
         for j, c in enumerate(r):
             if (i + j) % 2 == 0:
                 if not board_flipping or white_to_move:
@@ -271,12 +276,12 @@ def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move, mov
     alpha_sq_surface.fill("yellow")
 
     # Square highlighting
-    for i, r in enumerate(chess_board):
+    for i, r in enumerate(gs.board):
         for j, c in enumerate(r):
             # Start square highlighting
             if len(start_sq) == 2:
-                if i == start_sq[0] and j == start_sq[1] and chess_board[start_sq[0]][start_sq[1]] != "--":
-                    if not board_flipping or white_to_move:
+                if i == start_sq[0] and j == start_sq[1] and gs.board[start_sq[0]][start_sq[1]] != "--" and not gs.pawn_promote:  # Prevents final move highlighting in pawn promotion state from appearing as orange.
+                    if not board_flipping or white_to_move:                                                                       # Stops red highlight from quickly flickering in pawn_promote state if we keep the conditional here as well.
                         p.draw.rect(screen, "red",
                                     p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
                     elif board_flipping and not white_to_move:
@@ -298,7 +303,9 @@ def draw_board(screen, chess_board, start_sq, board_flipping, white_to_move, mov
                                                        BOARD_Y + opposite_flipped_index(i) * SQ_SIZE))
 
 
-def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_button_held_down):
+def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_button_held_down, animations):
+    # gs.pawn_promote is plugged into some conditionals to prevent flicking issues with pieces and square highlighting when entering the pawn promotion state.
+
     # Loop through every square in the board and see what square gives us a valid spot. Pretty bad algo but will work for now
     if not board_flipping or white_to_move:
         for i, r in enumerate(gs.board):
@@ -327,19 +334,27 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_butto
         for i, r in enumerate(gs.board):
             for j, c in enumerate(r):
                 piece = gs.board[i][j]
-                if len(start_sq) == 2 and i == start_sq[0] and j == start_sq[1] and mouse_button_held_down:
+                sq_animation_response = animations.is_sq_in_end_sq_animation((i, j))
+                if len(start_sq) == 2 and i == start_sq[0] and j == start_sq[1] and mouse_button_held_down and not gs.pawn_promote: # Don't render piece if it's supposed to be being dragged.
                     pass
+                elif sq_animation_response:  # Keep enemy pieces in a capture animation rendered until the animation completes.
+                    if sq_animation_response != "--":
+                        screen.blit(IMAGES[sq_animation_response], p.Rect(BOARD_X + (j * SQ_SIZE), BOARD_Y + (i * SQ_SIZE), SQ_SIZE, SQ_SIZE))
                 else:
-                    if piece != "--":
+                    if piece != "--":  # Render piece on board normally
                         screen.blit(IMAGES[piece], p.Rect(BOARD_X + (j * SQ_SIZE), BOARD_Y + (i * SQ_SIZE), SQ_SIZE, SQ_SIZE))
     elif board_flipping and not white_to_move:
         for i, r in enumerate(gs.board):
             for j, c in enumerate(r):
                 piece = gs.board[i][j]
-                if len(start_sq) == 2 and i == start_sq[0] and j == start_sq[1] and mouse_button_held_down:
+                sq_animation_response = animations.is_sq_in_end_sq_animation((i, j))
+                if len(start_sq) == 2 and i == start_sq[0] and j == start_sq[1] and mouse_button_held_down and not gs.pawn_promote:  # Don't render piece if it's supposed to be being dragged.
                     pass
+                elif sq_animation_response:  # Keep enemy pieces in a capture animation rendered until the animation completes.
+                    if sq_animation_response != "--":
+                        screen.blit(IMAGES[sq_animation_response], p.Rect(BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE), SQ_SIZE, SQ_SIZE))
                 else:
-                    if piece != "--":
+                    if piece != "--":  # Render piece on board normally
                         screen.blit(IMAGES[piece], p.Rect(BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE), SQ_SIZE, SQ_SIZE))
 
     # Blue highlight
@@ -350,16 +365,16 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_butto
         # is dragged off board, the blue square highlights way off the screen.
         if len(square_highlight_pos) == 0 and mouse_button_held_down:
             square_highlight_pos = (1000, 1000)  # Make the blue highlight off-screen
-        if not board_flipping or white_to_move:
+        if not board_flipping or white_to_move and not gs.pawn_promote:
             p.draw.rect(screen, "blue",
                         p.Rect(BOARD_X + (square_highlight_pos[1] if mouse_button_held_down else start_sq[1]) * SQ_SIZE,
                                BOARD_Y + (square_highlight_pos[0] if mouse_button_held_down else start_sq[0]) * SQ_SIZE, SQ_SIZE, SQ_SIZE), 6)  # Invert row and columns to get actual screen representation of highlight position.
-        elif board_flipping and not white_to_move:
+        elif board_flipping and not white_to_move and not gs.pawn_promote:
             p.draw.rect(screen, "blue", p.Rect(BOARD_X + (opposite_flipped_index(square_highlight_pos[1]) if mouse_button_held_down else opposite_flipped_index(start_sq[1])) * SQ_SIZE,
                                                BOARD_Y + (opposite_flipped_index(square_highlight_pos[0]) if mouse_button_held_down else opposite_flipped_index(start_sq[0])) * SQ_SIZE,
                                                SQ_SIZE, SQ_SIZE), 6)
     # Drag piece render
-    if start_sq and mouse_button_held_down:
+    if start_sq and mouse_button_held_down and not gs.pawn_promote:
         mouse_pos = p.mouse.get_pos()
         piece = gs.board[start_sq[0]][start_sq[1]]
         if piece != "--":
@@ -378,6 +393,87 @@ def render_all_moves(screen, gs):
 def opposite_flipped_index(index):
     # 8 is the length of our board
     return 8 - index - 1
+
+
+class AnimationHandler:
+    def __init__(self):
+        self.in_progress_animations = []
+        self.past_animations = []
+
+    def update_animations(self, screen, board_flipping, white_to_move):
+        animations_still_in_progress = []
+        for animation in self.in_progress_animations:
+            animation.animate(screen, board_flipping, white_to_move)
+            if not animation.animation_done:
+                animations_still_in_progress.append(animation)
+            else:
+                self.past_animations.append(animation)
+        self.in_progress_animations = animations_still_in_progress
+
+    def add_animation(self, move):
+        self.in_progress_animations.append(MoveAnimation(move))
+
+    def return_animation_end_squares(self):
+        return [animation.move.end_sq for animation in self.in_progress_animations]
+
+    def return_animation_start_squares(self):
+        return [animation.move.start_sq for animation in self.in_progress_animations]
+
+    def is_sq_in_end_sq_animation(self, sq):
+        for animation in self.in_progress_animations:
+            if sq == animation.move.end_sq:
+                return animation.move.piece_captured
+        return False
+
+
+class MoveAnimation:
+    def __init__(self, move):
+        self.move = move
+        self.dx = (self.move.end_sq[1] - self.move.start_sq[1])
+        self.dy = (self.move.end_sq[0] - self.move.start_sq[0])
+        self.end_x = BOARD_X + self.move.end_sq[1] * SQ_SIZE
+        self.end_y = BOARD_Y + self.move.end_sq[0] * SQ_SIZE
+        self.rect = p.Rect(BOARD_X + self.move.start_sq[1]*SQ_SIZE, BOARD_Y + self.move.start_sq[0]*SQ_SIZE, SQ_SIZE, SQ_SIZE)
+        self.speed = 20
+
+        self.image = IMAGES[self.move.piece_moved]
+        self.animation_done = False
+
+    def update_position(self):
+        x_speed = (self.speed * self.dx)
+        y_speed = (self.speed * self.dy)
+        self.rect.x += x_speed
+        self.rect.y += y_speed
+
+        if x_speed > 0:
+            if self.rect.x > self.end_x:
+                self.rect.x = self.end_x
+        elif x_speed < 0:
+            if self.rect.x < self.end_x:
+                self.rect.x = self.end_x
+        if y_speed > 0:
+            if self.rect.y > self.end_y:
+                self.rect.y = self.end_y
+        elif y_speed < 0:
+            if self.rect.y < self.end_y:
+                self.rect.y = self.end_y
+
+    def reverse_animation(self):
+        pass
+
+    def animate(self, screen, board_flipping, white_to_move):
+        if not board_flipping or white_to_move:
+            screen.blit(self.image, self.rect)
+        elif board_flipping and not white_to_move:
+            temp_rect = copy.deepcopy(self.rect)
+            temp_rect.x = (WIDTH - self.rect.x) - SQ_SIZE  # Subtract SQ_SIZE from the reflection calculation because squares aren't centered in their position. So we need to subtract for the reflection to not extend by 1 square.
+            temp_rect.y = (HEIGHT - self.rect.y) - SQ_SIZE  # Subtract SQ_SIZE from the reflection calculation because squares aren't centered in their position. So we need to subtract for the reflection to not extend by 1 square.
+            screen.blit(self.image,temp_rect)
+        self.update_position()
+        if self.rect.x == self.end_x and self.rect.y == self.end_y:
+            move_sound.play()
+            self.animation_done = True
+            pass
 
 
 if __name__ == "__main__":
