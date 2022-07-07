@@ -1,5 +1,22 @@
 import copy
 
+"""
+New branch Optimization_and_Refactors
+
+Trying to clean up/refactor code as much as I can + comment and make everything clean before I implement AI.
+ChessEngine is probably going to be rewritten a decent amount so the AI won't take years to look ahead and make moves.
+
+Things I wanted refactored:
+    - Simulating moves ahead
+    - Some functions to be simplified
+    - Remembering which pieces are on each squares to eliminate looking for them every turn.
+    - Better check system and check filtering
+    - Castling rewrite/simplification?
+    - Making sure the game works in any board state. Some bugs I noticed like the king spawning in a corner allows it to move outside the board, crashing the game.
+    - Insufficient material game over state, Repeated moves game over state.
+    - Move timer.
+"""
+
 
 class ChessEngine:
     def __init__(self):
@@ -28,7 +45,22 @@ class ChessEngine:
         self.stalemate = False
         self.winner = None
         self.current_valid_moves = self.get_valid_moves()
+        self.pieces_positions = self.piece_positions_on_board()
 
+    def gather_piece_positions(self):
+        """
+        One time run function at init
+        :return:
+        """
+        positions = []
+        for i, row in enumerate(self.board):
+            for j, col in enumerate(row):
+                if self.board[i][j] != "--":
+                    piece = self.board[i][j]
+                    square_occupied = (i, j)
+
+
+        return positions
     """
     Takes a Move as a parameter and executes it"""
     def do_move(self, move):

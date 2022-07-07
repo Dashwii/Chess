@@ -1,6 +1,20 @@
 import pygame as p
 from ChessEngine import ChessEngine, Move, copy
 
+"""
+New branch Optimization_and_Refactors
+
+Trying to clean up code on this branch before I implement AI/add other minor features. (That'll probably be the last thing I add)
+
+Things I wanted refactored:
+    - Rewrite main() into a class. Will make function arguments cleaner/make communication between pawn promotion and game over states cleaner.
+    - Simplify animations. They work well. Just don't like the amount of arguments being passed around and conditionals to prevent issues like flicking in pawn promotion state. 
+    - Reverse animations for previous moves. 
+    - Add chess notation for moves made on side.
+    - Allow resizing to I can test and play the game on my laptop. 
+    - Add move timer info on side.
+"""
+
 p.init()
 p.mixer.init()
 move_sound = p.mixer.Sound("move_sound.mp3")
@@ -10,6 +24,207 @@ SQ_SIZE = 128
 FPS = 60
 CLOCK = p.time.Clock()
 IMAGES = {}
+SCREEN = p.display.set_mode((WIDTH, HEIGHT))
+
+
+alpha_sq_surface = p.Surface((SQ_SIZE, SQ_SIZE))
+alpha_sq_surface.set_alpha(150)
+alpha_sq_surface.fill("yellow")
+
+
+class Game:
+    def __init__(self):
+        self.program_running = True
+        self.game_over = False
+        self.screen = SCREEN
+        self.click_start_sq = ()
+        self.game_state = ChessEngine()
+        self.mouse_button_held_down = False
+        self.board_flipping_on = True
+        self.toggle_board_flipping_back_on = False
+        self.player_clicks = []
+
+    def game_loop(self):
+        while self.program_running:
+            CLOCK.tick(FPS)
+            events = p.event.get()
+            self.handle_events(events)
+
+            if self.player_clicks == 2 and not self.mouse_button_held_down:
+                self.click_start_sq = ()
+                self.player_clicks = 0
+
+            self.rendering()
+
+    def rendering(self):
+        self.screen.fill((64, 64, 64))
+        self.draw_board()
+        self.draw_pieces()
+        p.display.flip()
+
+
+    def draw_board(self):
+        # When were drawing the board's squares. If the board is flipped, and we don't mirror the squares. The opposite square will draw
+        # over black's highlighted red square. There's two solutions. One option is sticking more conditionals to flip the board's
+        # squares to achieve the same effect but not draw over black's highlighted squares. The other option is to do another
+        # nested for loop to draw all highlighted squares and forget about the problem. For now, I've done the double nested for loop option.
+        for i, r in enumerate(self.game_state.board):
+            for j, c in enumerate(r):
+                if (i + j) % 2 == 0:
+                    if not self.board_flipping_on or self.game_state.white_to_move:
+                        p.draw.rect(self.screen, "white", p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+                    elif self.board_flipping_on and not self.game_state.white_to_move:
+                        p.draw.rect(self.screen, "white", p.Rect(BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), (BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+                else:
+                    p.draw.rect(self.screen, "dark green", p.Rect(BOARD_X + (j * SQ_SIZE), (BOARD_Y + (i * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+
+        # TODO: MAKE FLIP LOGIC OCCUR IN ONE FUNCTION. FUNCTION WILL CONSTANTLY CHECK IF BOARD IS FLIPPED AND INVERT ALL NECESSARY VARIABLES
+        # Player click_start_sq highlight
+        if len(self.click_start_sq) == 2:
+            # click_start_sq rendering
+            row = self.click_start_sq[0]
+            col = self.click_start_sq[1]
+            if not self.board_flipping_on or self.game_state.white_to_move:
+                p.draw.rect(self.screen, "red", p.Rect(BOARD_X + (col * SQ_SIZE), BOARD_Y + (row * SQ_SIZE), SQ_SIZE, SQ_SIZE))
+            elif self.board_flipping_on or not self.game_state:  # <---- Try reducing to just "else"
+                p.draw.rect(self.screen, "red", p.Rect(BOARD_X + (opposite_flipped_index(col) * SQ_SIZE), BOARD_Y + (opposite_flipped_index(row) * SQ_SIZE), SQ_SIZE, SQ_SIZE))
+            # Last move rendering
+            if len(self.game_state.move_log) > 0:
+                if not self.board_flipping_on or self.game_state.white_to_move:
+                    # Start sq render
+                    self.screen.blit(alpha_sq_surface, (BOARD_X + (self.game_state.move_log[-1].start_sq * SQ_SIZE), BOARD_Y + (self.game_state.move_log[-1].start_sq * SQ_SIZE)))
+
+                    # End sq render
+                    self.screen.blit(alpha_sq_surface, (BOARD_X + (self.game_state.move_log[-1].end_sq * SQ_SIZE), BOARD_Y + (self.game_state.move_log[-1].end_sq * SQ_SIZE)))
+                elif self.board_flipping_on and not self.game_state.white_to_move:
+                    # Start sq render
+                    self.screen.blit(alpha_sq_surface, (BOARD_X + (opposite_flipped_index(self.game_state.move_log[-1].start_sq) * SQ_SIZE),
+                                                        BOARD_Y + (opposite_flipped_index(self.game_state.move_log[-1].start_sq) * SQ_SIZE)))
+
+                    # End sq render
+                    self.screen.blit(alpha_sq_surface, (BOARD_X + (opposite_flipped_index(self.game_state.move_log[-1].end_sq) * SQ_SIZE),
+                                                        BOARD_Y + (opposite_flipped_index(self.game_state.move_log[-1].end_sq) * SQ_SIZE)))
+
+        # Blue square mouse dragging highlight
+        if len(self.click_start_sq) == 2:
+            square_highlight_pos = mouse_sq_coordinates(self.board_flipping_on, self.game_state.white_to_move)
+            # We do this so if the player lets go of a piece and moves their mouse outside the board's space.
+            # The blue square highlight returns to the pieces spot. The code directly below makes sure that if the piece
+            # is dragged off board, the blue square highlights way off the screen.
+            if len(square_highlight_pos) == 0 and self.mouse_button_held_down:
+                square_highlight_pos = (1000, 1000)  # Make the blue highlight off-screen
+            if not self.board_flipping_on or self.game_state.white_to_move:
+                p.draw.rect(self.screen, "blue", p.Rect(BOARD_X + (square_highlight_pos[1] if self.mouse_button_held_down else self.click_start_sq[1]) * SQ_SIZE,
+                            BOARD_Y + (square_highlight_pos[0] if self.mouse_button_held_down else self.click_start_sq[0]) * SQ_SIZE, SQ_SIZE, SQ_SIZE), 6)
+            else:
+                p.draw.rect(self.screen, "blue", p.Rect(BOARD_X + (opposite_flipped_index(square_highlight_pos[1]) if self.mouse_button_held_down else opposite_flipped_index(self.click_start_sq[1])) * SQ_SIZE,
+                            BOARD_Y + (opposite_flipped_index(square_highlight_pos[0]) if self.mouse_button_held_down else opposite_flipped_index(self.click_start_sq[0])) * SQ_SIZE,
+                            SQ_SIZE, SQ_SIZE), 6)
+
+
+    def draw_pieces(self):
+        """
+        Loop through a list of all saved positions of pieces on the board and render those pieces.
+        If the piece's square is currently highlighted. We will also render the squares that piece attacks.
+        :return:
+        """
+        saved_positions_of_all_pieces = [] # <-- Fake list. This will be implemented into game_state later
+        # Render pieces
+        for piece in saved_positions_of_all_pieces:
+            _piece = piece[0]
+            square = piece[1]
+            squares_attacked = piece[2]
+            if not self.board_flipping_on or self.game_state.white_to_move:
+                if not (square == self.click_start_sq and self.mouse_button_held_down):  # Only render if the player hasn't selected this square and is holding their mouse button down.
+                    self.screen.blit(IMAGES[_piece], p.Rect((BOARD_X + (square[1] * SQ_SIZE)), BOARD_Y + (square[0] * SQ_SIZE)))
+                if square == self.click_start_sq:
+                    for square_attacked in squares_attacked:
+                        if self.game_state.board[square_attacked[0]][square_attacked[1]] == "--":
+                            p.draw.circle(self.screen, "dark gray",
+                                          (SQ_SIZE // 2 + BOARD_X + (square_attacked[1] * SQ_SIZE),
+                                           SQ_SIZE // 2 + BOARD_Y + (square_attacked[0] * SQ_SIZE)), 20)
+                        else:
+                            p.draw.circle(self.screen, "dark gray",
+                                          (SQ_SIZE // 2 + BOARD_X + (square_attacked[1] * SQ_SIZE),
+                                           SQ_SIZE // 2 + BOARD_Y + (square_attacked[0] * SQ_SIZE)), 20)
+
+            else:
+                if not (square == self.click_start_sq and self.mouse_button_held_down):  # Only render if the player hasn't selected this square and is holding their mouse button down.
+                    self.screen.blit(IMAGES[_piece], p.Rect((BOARD_X + (opposite_flipped_index(square[1]) * SQ_SIZE)), BOARD_Y + (opposite_flipped_index(square[0]) * SQ_SIZE)))
+                if square == self.click_start_sq:
+                    for square_attacked in squares_attacked:
+                        if self.game_state.board[square_attacked[0]][square_attacked[1]] == "--":
+                            p.draw.circle(self.screen, "dark gray",
+                                          (SQ_SIZE // 2 + BOARD_X + (opposite_flipped_index(square_attacked[1]) * SQ_SIZE),
+                                           SQ_SIZE // 2 + BOARD_Y + (opposite_flipped_index(square_attacked[0]) * SQ_SIZE)), 20)
+                        else:
+                            p.draw.circle(self.screen, "dark gray",
+                                          (SQ_SIZE // 2 + BOARD_X + (opposite_flipped_index(square_attacked[1]) * SQ_SIZE),
+                                           SQ_SIZE // 2 + BOARD_Y + (opposite_flipped_index(square_attacked[0]) * SQ_SIZE)), 20)
+
+        # Render dragging
+        if self.click_start_sq and self.mouse_button_held_down:
+            mouse_pos = p.mouse.get_pos()
+            drag_piece = self.game_state.board[self.click_start_sq[0]][self.click_start_sq[1]]
+            self.screen.blit(IMAGES[drag_piece], p.Rect(mouse_pos[0] - SQ_SIZE // 2, mouse_pos[1] - SQ_SIZE // 2, SQ_SIZE, SQ_SIZE))
+
+
+
+    def handle_events(self, events):
+        for e in events:
+            if e.type == p.QUIT:
+                self.game_over = False
+                self.program_running = False
+                p.display.quit()
+            if e.type == p.MOUSEBUTTONDOWN:
+                if not self.game_over:  # May stick "not gs.pawn_promote" here too
+                    self.handle_player_click_mouse_button_down()
+            if e.type == p.MOUSEBUTTONUP:
+                if not self.game_over:
+                    self.handle_player_click_mouse_button_up()
+            if e.type == p.KEYDOWN:
+                if e.key == p.K_z and len(self.click_start_sq) == 0:
+                    self.game_state.undo_move()
+                if e.key == p.K_f and len(self.click_start_sq) == 0:
+                    # Think we can allow board flipping even if a piece is selected. Just flip self.click_start_sq's coordinates
+                    if self.board_flipping_on:
+                        print("Board flipping toggled off.")
+                    else:
+                        print("Board flipping toggled on.")
+                    self.board_flipping_on = not self.board_flipping_on
+                if e.key == p.K_p:
+                    # Will have a cleanup function here. To reset all variables that need to be reset.
+                    self.game_state = ChessEngine()
+
+    def handle_player_click_mouse_button_down(self):
+        """
+        Rewrite of old click logic. Gonna test more later
+        :return: None
+        """
+        self.mouse_button_held_down = True
+        position_clicked = mouse_sq_coordinates(self.board_flipping_on, self.game_state.white_to_move)
+        if len(position_clicked) == 2:
+            # Make sure we are clicking on a valid piece for our turn or were clicking on a square we want to move to.
+            if len(self.click_start_sq) == 2 and len(position_clicked) == 2:
+                self.handle_move()
+                if clicked_on_turn_piece(position_clicked, self.game_state) and self.click_start_sq != position_clicked:
+                    self.click_start_sq = position_clicked
+                elif position_clicked == self.click_start_sq:
+                    self.player_clicks += 1
+                else:
+                    self.click_start_sq = ()
+                    self.player_clicks = 0
+            else:
+                self.click_start_sq = position_clicked
+
+    def handle_player_click_mouse_button_up(self):
+        pass
+
+    def handle_move(self):
+        pass
+
+
+
 
 BOARD_X = WIDTH // 2 - BOARD_WIDTH // 2
 BOARD_Y = HEIGHT // 2 - BOARD_HEIGHT // 2
@@ -18,6 +233,12 @@ font = p.font.SysFont("Comic Sans MS", 50)
 current_turn_text = font.render("Current Turn:", True, "white")
 white_text = font.render("White", True, "white")
 black_text = font.render("Black", True, "white")
+
+def load_images():
+    # Load images once into a dictionary for later access.
+    pieces = ["bR", "bN", "bB", "bQ", "bK", "bP", "wR", "wN", "wB", "wQ", "wK", "wP"]
+    for piece in pieces:
+        IMAGES[piece] = p.transform.scale(p.image.load(f"images/{piece}.png"), (SQ_SIZE, SQ_SIZE))
 
 
 class PawnPromoteSelect:
@@ -102,11 +323,7 @@ class GameOver:
             self.draw_text(screen, "Stalemate")
 
 
-def load_images():
-    # Load images once into a dictionary for later access.
-    pieces = ["bR", "bN", "bB", "bQ", "bK", "bP", "wR", "wN", "wB", "wQ", "wK", "wP"]
-    for piece in pieces:
-        IMAGES[piece] = p.transform.scale(p.image.load(f"images/{piece}.png"), (SQ_SIZE, SQ_SIZE))
+
 
 
 def main():
@@ -162,7 +379,7 @@ def main():
                         clicks = 0
                 elif len(end_pos_click) == 0:  # If user drags a piece off the board or on an unplayable square. Keep the square highlighted.
                     clicks = 0
-            elif e.type == p.KEYDOWN:
+            if e.type == p.KEYDOWN:
                 if e.key == p.K_z and len(start_sq) == 0 and not gs.pawn_promote:  # Prevent while dragging a piece and while promoting a piece
                     gs.undo_move()
                 if e.key == p.K_f and len(start_sq) == 0 and not gs.pawn_promote:  # Prevent while dragging a piece and while promoting a piece
@@ -477,4 +694,6 @@ class MoveAnimation:
 
 
 if __name__ == "__main__":
-    main()
+    #load_images()
+    game = Game()
+    game.game_loop()
