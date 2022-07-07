@@ -278,17 +278,17 @@ class ChessEngine:
         moves = []
         turn = board[r][c][0]
 
-        def en_passant_check(turn, move_log):
+        def en_passant_check(turn, enemy_r_c, move_log):
             if len(move_log) == 0:
                 return
 
             if turn == "w":
-                if move_log[-1].end_row == 3 and move_log[-1].start_row == 1:
+                if move_log[-1].end_row == 3 and move_log[-1].start_row == 1 and enemy_r_c == move_log[-1].end_sq:
                     return True
                 else:
                     return False
             else:
-                if move_log[-1].end_row == 4 and move_log[-1].start_row == 6:
+                if move_log[-1].end_row == 4 and move_log[-1].start_row == 6 and enemy_r_c == move_log[-1].end_sq:
                     return True
                 else:
                     return False
@@ -306,11 +306,11 @@ class ChessEngine:
                 moves.append(Move((r, c), (r - 1, c + 1), board))
             # En passant
             if 0 <= c - 1 and board[r][c - 1] == "bP":
-                if en_passant_check("w", self.move_log):
-                    moves.append(Move((r, c), (r - 1, c - 1), board, en_passant=(r, c - 1)))
+                if en_passant_check("w", (r, c-1), self.move_log):
+                    moves.append(Move((r, c), (r - 1, c - 1), board, en_passant=(r, c - 1)))  # Right scan
             if c + 1 < len(board) and board[r][c + 1] == "bP":
-                if en_passant_check("w", self.move_log):
-                    moves.append(Move((r, c), (r - 1, c + 1), board, en_passant=(r, c + 1)))
+                if en_passant_check("w", (r, c+1), self.move_log):
+                    moves.append(Move((r, c), (r - 1, c + 1), board, en_passant=(r, c + 1)))  # Left scan
 
         else:
             # Two space move
@@ -324,10 +324,10 @@ class ChessEngine:
                 moves.append(Move((r, c), (r + 1, c + 1), board))
             # En passant
             if 0 <= c - 1 and board[r][c - 1] == "wP":
-                if en_passant_check("b", self.move_log):
+                if en_passant_check("b", (r, c-1), self.move_log):
                     moves.append(Move((r, c), (r + 1, c - 1), board, en_passant=(r, c - 1)))
             if c + 1 < len(board) and board[r][c + 1] == "wP":
-                if en_passant_check("b", self.move_log):
+                if en_passant_check("b", (r, c+1), self.move_log):
                     moves.append(Move((r, c), (r + 1, c + 1), board, en_passant=(r, c + 1)))
         return moves
 
