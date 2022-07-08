@@ -96,7 +96,10 @@ def get_pawn_moves(turn, occupied_square, board, move_log):
 
 
 def get_rook_moves(turn, occupied_square, board):
-    return straight_line_scan(turn, occupied_square, board)
+    squares = []
+    squares.extend(row_scan(turn, occupied_square, board))
+    squares.extend(column_scan(turn, occupied_square, board))
+    return squares
 
 
 def get_bishop_moves(turn, occupied_square, board):
@@ -115,10 +118,9 @@ def get_king_moves(turn, occupied_square, board, castle_rights):
     pass
 
 
-def straight_line_scan(turn, occupied_square, board):
+def row_scan(turn, occupied_square, board):
     squares = []
 
-    # Row scan
     temp_squares = []
     #current_row = board[occupied_square[0]]
     current_row = board
@@ -146,18 +148,53 @@ def straight_line_scan(turn, occupied_square, board):
                 break
     squares.extend(temp_squares)
 
-
     return squares
 
 
+def column_scan(turn, occupied_square, board):
+    squares = []
+    column_list = board
+    # column_list = []
+    # for i, row in enumerate(board):
+    #     column_list.append(board[i][occupied_square[1]])
+    squares.extend(list_scan(turn, occupied_square, board))
+    return squares
 
-def test_straight_line():
+
+def list_scan(turn, occupied_square, _list):
+    squares = []
+    for i, square in enumerate(_list):
+        if i == occupied_square[1]:  # If the current column equals our occupied_square column
+            pass
+
+        elif square != "--" and square[0] == turn:
+            if i < occupied_square[1]:
+                squares = []
+
+            if i > occupied_square[1]:
+                break
+
+        elif square == "--":
+            squares.append((occupied_square, (occupied_square[0], i)))
+
+        elif square != "--" and square[0] != turn:
+            if i < occupied_square[1]:
+                squares = []
+
+            squares.append((occupied_square, (occupied_square[0], i)))
+
+            if i > occupied_square[1]:
+                break
+    return squares
+
+
+def test_row_scan():
     test1 = ["bP", "bP", "bP", "--", "bN", "--", "--", "bR"]
     test2 = ["bP", "wP", "bP", "--", "bN", "--", "--", "bR"]
     test3 = ["bP", "--", "wP", "bP", "--", "bR", "wP", "wP"]
-    print(straight_line_scan("b", (0, 7), test1))
-    print(straight_line_scan("b", (0, 7), test2))
-    print(straight_line_scan("b", (0, 5), test3))
+    print(row_scan("b", (0, 7), test1))
+    print(row_scan("b", (0, 7), test2))
+    print(row_scan("b", (0, 5), test3))
 
 
-test_straight_line()
+test_row_scan()
