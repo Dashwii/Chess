@@ -695,5 +695,6 @@ class MoveAnimation:
 
 if __name__ == "__main__":
     #load_images()
-    game = Game()
-    game.game_loop()
+    #game = Game()
+    #game.game_loop()
+    main()

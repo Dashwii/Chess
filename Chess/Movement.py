@@ -39,7 +39,7 @@ def return_piece_moves(piece, occupied_square, board, move_log, castle_rights):
     elif piece_type == "Q":
         return get_queen_moves(turn, occupied_square, board)
     elif piece_type == "K":
-        return get_king_moves(turn, occupied_square, board)
+        return get_king_moves(turn, occupied_square, board, castle_rights)
 
 
 def en_passant_check(turn, enemy_square, move_log):
@@ -103,19 +103,23 @@ def get_rook_moves(turn, occupied_square, board):
 
 
 def get_bishop_moves(turn, occupied_square, board):
-    pass
+    squares = []
+    return squares
 
 
 def get_knight_moves(turn, occupied_square, board):
-    pass
+    squares = []
+    return squares
 
 
 def get_queen_moves(turn, occupied_square, board):
-    pass
+    squares = []
+    return squares
 
 
 def get_king_moves(turn, occupied_square, board, castle_rights):
-    pass
+    squares = []
+    return squares
 
 
 def row_scan(turn, occupied_square, board):
@@ -157,11 +161,11 @@ def column_scan(turn, occupied_square, board):
     # column_list = []
     # for i, row in enumerate(board):
     #     column_list.append(board[i][occupied_square[1]])
-    squares.extend(list_scan(turn, occupied_square, board))
+    squares.extend(straight_list_scan(turn, occupied_square, board))
     return squares
 
 
-def list_scan(turn, occupied_square, _list):
+def straight_list_scan(turn, occupied_square, _list):
     squares = []
     for i, square in enumerate(_list):
         if i == occupied_square[1]:  # If the current column equals our occupied_square column
@@ -197,18 +201,46 @@ def diagonal_scan(turn, occupied_square, board):
         current_col_distance_from_bishop = occupied_square[1] - i
         dy = occupied_square[0] - current_col_distance_from_bishop
         if 0 <= dy < len(board):
-            right_diagonal.append((dy, i))
+            if current_col_distance_from_bishop == 0:
+                right_diagonal.append((board[dy][i], (dy, i), "HOME"))
+            else:
+                right_diagonal.append((board[dy][i], (dy, i)))
 
         # Left diagonal
         opposite_i = opposite_flipped_index(i)
         opposite_col_distance_from_bishop = opposite_i - occupied_square[1]
         opposite_dy = occupied_square[0] - opposite_col_distance_from_bishop
         if 0 <= opposite_dy < len(board):
-            left_diagonal.append((opposite_dy, opposite_i))
+            if opposite_col_distance_from_bishop == 0:
+                left_diagonal.append((board[opposite_dy][opposite_i], (opposite_dy, opposite_i), "HOME"))
+            else:
+                left_diagonal.append((board[opposite_dy][opposite_i], (opposite_dy, opposite_i)))
+    squares.extend(diagonal_list_scan(turn, occupied_square, right_diagonal))
+    squares.extend(diagonal_list_scan(turn, occupied_square, left_diagonal))
 
-    squares.extend(list_scan("b", occupied_square, right_diagonal))
-    print(squares)
-    #squares.extend(list_scan("b", occupied_square, left_diagonal))
+
+def diagonal_list_scan(turn, occupied_square, _list):
+    squares = []
+    for i, square in enumerate(_list):
+        if len(square) == 3 and square[2] == "HOME":
+            pass
+
+        elif square[0] != "--" and square[0][0] == turn:
+            if i < occupied_square[0]:
+                squares = []
+            if i > occupied_square[0]:
+                break
+
+        elif square[0] == "--":
+            squares.append((occupied_square, (square[1][0], square[1][1])))
+
+        elif square[0] != "--" and square[0] != turn:
+            if i < occupied_square[1]:
+                squares = []
+            squares.append((occupied_square, (square[1][0], square[1][1])))
+            if i > occupied_square[1]:
+                break
+    return squares
 
 
 
@@ -231,20 +263,15 @@ def test_diagonal_scan():
              ["--", "--", "--", "--", "--", "--", "--", "--"],
              ["--", "--", "--", "--", "--", "--", "--", "--"],
              ["--", "--", "--", "--", "--", "--", "--", "--"],
-             ["--", "--", "--", "--", "bP", "--", "--", "--"],
+             ["--", "--", "--", "--", "bB", "--", "--", "--"],
              ["--", "--", "--", "--", "--", "--", "--", "--"],
              ["--", "--", "--", "--", "--", "--", "--", "--"],
              ["--", "--", "--", "--", "--", "--", "--", "--"]]
 
     diagonal_scan("b", (4, 4), test1)
 
+
 def opposite_flipped_index(index):
     # 8 is the length of our board
     return 8 - index - 1
 
-
-test = [[(i, j) for j in range(8)] for i in range(8)]
-
-#diagonal_scan("b", (5, 5), test)
-
-test_diagonal_scan()

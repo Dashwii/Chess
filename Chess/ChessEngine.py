@@ -1,5 +1,5 @@
 import copy
-
+from Movement import return_piece_moves
 """
 New branch Optimization_and_Refactors
 
@@ -16,6 +16,112 @@ Things I wanted refactored:
     - Insufficient material game over state, Repeated moves game over state.
     - Move timer.
 """
+
+
+class ChessGameEngine:
+    def __init__(self):
+        self.board = [
+            ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
+            ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
+            ["--", "--", "--", "--", "--", "--", "--", "--"],
+            ["--", "--", "--", "--", "--", "--", "--", "--"],
+            ["--", "--", "--", "--", "--", "--", "--", "--"],
+            ["--", "--", "--", "--", "--", "--", "--", "--"],
+            ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
+            ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]
+        ]
+
+
+        self.white_to_move = True
+        self.promote_pawn = False
+        self.move_log = []
+        self.checkmate = False
+        self.stalemate = False
+        self.winner = True
+        self.valid_moves = []
+        self.piece_positions = self.get_all_piece_coordinates()
+        self.piece_position_history = []
+        self.castling_rights = {}
+
+
+    def get_all_piece_coordinates(self):
+        """
+        One time function ran at init to keep track of all piece positions on the board.
+        :return: list
+        """
+        coords = []
+        for i, row in enumerate(self.board):
+            for j, col in enumerate(row):
+                if self.board[i][j] != "--":
+                    piece = self.board[i][j]
+                    coords.append([piece, [i, j], []])
+        return coords
+
+    def do_move(self, move):
+        self.board[move.start_row][move.end_row] = "--"
+        if move.en_passant is not None:
+            self.handle_en_passant_logic()
+        elif move.piece_moved[1] in ("K", "R"):
+            self.handle_castling_logic()
+        self.board[move.end_row][move.end_col] = move.piece_moved
+        self.move_log.append(move)
+
+        self.promotion_check()
+        self.next_turn_logic()
+
+    def handle_en_passant_logic(self):
+        pass
+
+
+    def handle_castling_logic(self):
+        pass
+
+
+    def promotion_check(self):
+        pass
+
+    def next_turn_logic(self):
+        if self.promote_pawn:
+            self.promote_pawn = False
+        self.white_to_move = not self.white_to_move
+
+        # Game end logic
+        if self.white_to_move:
+            check = is_king_in_check(get_king_square("w", self.board))
+        else:
+            check = is_king_in_check(get_king_square("b", self.board))
+        if len(self.valid_moves) == 0 and check:
+            self.checkmate = True
+            if self.white_to_move:
+                self.winner = "Black"
+            else:
+                self.winner = "White"
+        elif len(self.valid_moves) == 0 and not check:
+            self.stalemate = True
+
+    def generate_valid_moves(self):
+        for piece in self.piece_positions:
+            piece[2] = return_piece_moves(piece[0], piece[1], self.board, self.move_log, self.castling_rights)
+
+
+
+
+
+
+
+
+def is_king_in_check(king_sq, enemy_moves):
+    for move in enemy_moves:
+        if move.end_sq == king_sq:
+            return True
+    return False
+
+
+def get_king_square(turn, board):
+    for i, row in enumerate(board):
+        for j, col in enumerate(row):
+            if board[i][j] == turn + "K":
+                return i, j
 
 
 class ChessEngine:
@@ -45,22 +151,7 @@ class ChessEngine:
         self.stalemate = False
         self.winner = None
         self.current_valid_moves = self.get_valid_moves()
-        self.pieces_positions = self.piece_positions_on_board()
 
-    def gather_piece_positions(self):
-        """
-        One time run function at init
-        :return:
-        """
-        positions = []
-        for i, row in enumerate(self.board):
-            for j, col in enumerate(row):
-                if self.board[i][j] != "--":
-                    piece = self.board[i][j]
-                    square_occupied = (i, j)
-
-
-        return positions
     """
     Takes a Move as a parameter and executes it"""
     def do_move(self, move):
