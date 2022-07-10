@@ -1,5 +1,5 @@
 import copy
-
+from Movement import *
 
 """
 New branch Optimization_and_Refactors
@@ -19,9 +19,7 @@ Things I wanted refactored:
 """
 
 
-# Squares that will be checked for castling
-KING_SIDE_VECTOR_SCANS = [(0, 1), (0, 2)]
-QUEEN_SIDE_VECTOR_SCANS = [(0, -1), (0, -2), (0, -3)]
+
 
 
 class ChessEngine:
@@ -30,7 +28,7 @@ class ChessEngine:
             ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
             ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
-            ["--", "--", "--", "--", "--", "--", "--", "--"],
+            ["--", "--", "--", "--", "wR", "--", "--", "--"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
@@ -101,9 +99,9 @@ class ChessEngine:
 
         # Determine if were in checkmate or game is a draw.
         if self.white_to_move:
-            check = check_king_in_check(get_king_square("w", self.board), self.get_all_possible_moves(self.board, not self.white_to_move))
+            check = check_if_king_in_check(get_king_square("w", self.board), self.get_all_possible_moves(self.board, not self.white_to_move))
         else:
-            check = check_king_in_check(get_king_square("b", self.board), self.get_all_possible_moves(self.board, not self.white_to_move))
+            check = check_if_king_in_check(get_king_square("b", self.board), self.get_all_possible_moves(self.board, not self.white_to_move))
         if len(self.current_valid_moves) == 0 and check:
             self.checkmate = True
             # Get previous turn before turns flipped.
@@ -241,7 +239,7 @@ class ChessEngine:
                 filtered_non_king_capture_moves.append(move)
 
         current_king_sq = get_king_square(our_turn, self.board)
-        currently_in_check = check_king_in_check(current_king_sq, self.get_all_possible_moves(self.board, not self.white_to_move))
+        currently_in_check = check_if_king_in_check(current_king_sq, self.get_all_possible_moves(self.board, not self.white_to_move))
 
         for move in filtered_non_king_capture_moves:  # Clear out moves that will put current turn's king in check
             board = copy.deepcopy(self.board)
@@ -262,7 +260,6 @@ class ChessEngine:
     """
     Will determine all possible moves not considering king check"""
     def get_all_possible_moves(self, board, white_to_move):
-        # Passing an argument instead of accessing self so we can test moves for the turn ahead. Maybe white_to_move in this function should be 'turn'.
         moves = []
         for i, r in enumerate(board):  # Num of rows
             for j, c in enumerate(r):  # Num of columns
@@ -282,362 +279,3 @@ class ChessEngine:
                     else:
                         moves.extend(get_king_moves(turn, i, j, board, self.castling))
         return moves
-
-
-
-def get_king_moves(turn, r, c, board, castling_rights):
-    moves = []
-    vectors = [(-1, -1), (0, -1), (-1, 0), (1, 0), (0, 1), (-1, 1), (1, -1), (1, 1)]
-    for direction in vectors:
-        dx = c + direction[1]
-        dy = r + direction[0]
-        if 0 <= dx < len(board) and 0 <= dy < len(board):
-            sq_occupy = check_if_square_has_enemy_piece((r, c), (dy, dx), board)
-            if sq_occupy == "EMPTY" or sq_occupy == "ENEMY":
-                moves.append(Move((r, c), (dy, dx), board))
-            else:
-                pass
-
-    # Castling
-    if turn == "w":
-        if castling_rights["W_King_Side"]:
-            for vector in KING_SIDE_VECTOR_SCANS:
-                if c + vector[1] < len(board):
-                    if board[r + vector[0]][c + vector[1]] != "--":
-                        break
-                else:
-                    break
-            else:
-                moves.append(Move((r, c), (r, c + 2), board, castle=[(r, 7), (r, 5)]))
-        if castling_rights["W_Queen_Side"]:
-            for vector in QUEEN_SIDE_VECTOR_SCANS:
-                if board[r + vector[0]][c + vector[1]] != "--":
-                    break
-            else:
-                moves.append(Move((r, c), (r, c - 2), board, castle=[(r, 0), (r, 3)]))
-    else:
-        if castling_rights["B_King_Side"]:
-            for vector in KING_SIDE_VECTOR_SCANS:
-                if c + vector[1] < len(board):
-                    if board[r + vector[0]][c + vector[1]] != "--":
-                        break
-                else:
-                    break
-            else:
-                moves.append(Move((r, c), (r, c + 2), board, castle=[(r, 7), (r, 5)]))
-        if castling_rights["B_Queen_Side"]:
-            for vector in QUEEN_SIDE_VECTOR_SCANS:
-                if board[r + vector[0]][c + vector[1]] != "--":
-                    break
-            else:
-                moves.append(Move((r, c), (r, c - 2), board, castle=[(r, 0), (r, 3)]))
-
-    return moves
-
-def get_queen_moves(r, c, board):
-    moves = []
-    moves.extend(diagonal_scan(r, c, board))
-    moves.extend(horizontal_scan(r, c, board))
-    moves.extend(horizontal_scan(r, c, board, reverse=True))
-    return moves
-
-
-def check_king_in_check(current_king_sq, enemy_moves):
-    """
-    Check if the king were searching for is in check"""
-    for enemy_move in enemy_moves:
-        if enemy_move.end_sq == current_king_sq:
-            return True
-    else:
-        return False
-
-
-def get_king_square(turn, board):
-    """
-    Get the current square the king were searching for is on"""
-    for i, row in enumerate(board):
-        for j, col in enumerate(row):
-            if board[i][j] == turn + "K":
-                return i, j
-
-
-# def return_piece_moves(piece, occupied_square, board, move_log, castle_rights):
-#     turn = piece[0]
-#     piece_type = piece[1]
-#
-#     if piece_type == "P":
-#         return get_pawn_moves(turn, occupied_square, board, move_log)
-#     elif piece_type == "R":
-#         return get_rook_moves(turn, occupied_square, board)
-#     elif piece_type == "B":
-#         return get_bishop_moves(turn, occupied_square, board)
-#     elif piece_type == "N":
-#         return get_knight_moves(turn, occupied_square, board)
-#     elif piece_type == "Q":
-#         return get_queen_moves(turn, occupied_square, board)
-#     elif piece_type == "K":
-#         return get_king_moves(turn, occupied_square, board, castle_rights)
-
-
-def en_passant_check(turn, enemy_r_c, move_log):
-    if len(move_log) == 0:
-        return
-
-    if turn == "w":
-        if move_log[-1].end_row == 3 and move_log[-1].start_row == 1 and enemy_r_c == move_log[-1].end_sq:
-            return True
-        else:
-            return False
-    else:
-        if move_log[-1].end_row == 4 and move_log[-1].start_row == 6 and enemy_r_c == move_log[-1].end_sq:
-            return True
-        else:
-            return False
-
-
-def get_pawn_moves(r, c, board, move_log):
-    """
-    Returns all moves for the pawn piece in the row and column. Will search for diagonal captures and vertical movement."""
-
-    moves = []
-    turn = board[r][c][0]
-
-
-    # Search for every column above the pawn. If nothing is blocking then it's a valid move.
-    if turn == "w":  # Go up the column from whites perspective
-        # Two space move
-        if r == 6 and board[r - 1][c] == "--" and board[r - 2][c] == "--":
-            moves.append(Move((r, c), (r - 2, c), board))
-        if 0 <= r - 1 and board[r - 1][c] == "--":
-            moves.append(Move((r, c), (r - 1, c), board))
-        if (0 <= r - 1 and 0 <= c - 1) and board[r - 1][c - 1][0] == "b":
-            moves.append(Move((r, c),(r - 1, c - 1), board))
-        if (0 <= r - 1 and c + 1 < len(board)) and board[r - 1][c + 1][0] == "b":
-            moves.append(Move((r, c), (r - 1, c + 1), board))
-        # En passant
-        if 0 <= c - 1 and board[r][c - 1] == "bP":
-            if en_passant_check("w", (r, c-1), move_log):
-                moves.append(Move((r, c), (r - 1, c - 1), board, en_passant=(r, c - 1)))  # Right scan
-        if c + 1 < len(board) and board[r][c + 1] == "bP":
-            if en_passant_check("w", (r, c+1), move_log):
-                moves.append(Move((r, c), (r - 1, c + 1), board, en_passant=(r, c + 1)))  # Left scan
-
-    else:
-        # Two space move
-        if r == 1 and board[r + 1][c] == "--" and board[r + 2][c] == "--":
-            moves.append(Move((r, c), (r + 2, c), board))
-        if r + 1 < len(board) and board[r + 1][c] == "--":  # Go down the column from whites perspective
-            moves.append(Move((r, c), (r + 1, c), board))
-        if (r + 1 < len(board) and 0 <= c - 1) and board[r + 1][c - 1] != "--" and board[r + 1][c - 1][0] == "w":
-            moves.append(Move((r, c),(r + 1, c - 1), board))
-        if (r + 1 < len(board) and c + 1 < len(board)) and board[r + 1][c + 1] != "--" and board[r + 1][c + 1][0] == "w":
-            moves.append(Move((r, c), (r + 1, c + 1), board))
-        # En passant
-        if 0 <= c - 1 and board[r][c - 1] == "wP":
-            if en_passant_check("b", (r, c-1), move_log):
-                moves.append(Move((r, c), (r + 1, c - 1), board, en_passant=(r, c - 1)))
-        if c + 1 < len(board) and board[r][c + 1] == "wP":
-            if en_passant_check("b", (r, c+1), move_log):
-                moves.append(Move((r, c), (r + 1, c + 1), board, en_passant=(r, c + 1)))
-    return moves
-
-
-def get_rook_moves(r, c, board):
-    """
-    Returns all possible moves for the rook. Will search vertically and horizontally."""
-    moves = []
-    moves.extend(horizontal_scan(r, c, board))
-    moves.extend(horizontal_scan(r, c, board, reverse=True))
-    return moves
-
-
-def get_bishop_moves(r, c, board):
-    return diagonal_scan(r, c, board)
-
-
-def check_if_square_has_enemy_piece(start_sq, end_sq, board):
-    # Function will soon acknowledge kings.
-    start_r = start_sq[0]
-    start_c = start_sq[1]
-    end_r = end_sq[0]
-    end_c = end_sq[1]
-
-    our_turn = board[start_r][start_c][0]
-    other_turn = board[end_r][end_c][0]
-
-    if other_turn == "-":
-        return "EMPTY"
-    elif other_turn == our_turn:
-        return "FRIENDLY"
-    else:
-        return "ENEMY"
-
-
-def column_knight_check(current_r, comparing_r, r_abs_dist, c, board):
-    _moves = []
-    if c + 1 < len(board):
-        if c + 2 < len(board):
-            if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c + 2), board) != "FRIENDLY" and r_abs_dist == 1:
-                _moves.append(Move((current_r, c), (comparing_r, c + 2), board))
-        if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c + 1), board) != "FRIENDLY" and r_abs_dist == 2:
-            _moves.append(Move((current_r, c), (comparing_r, c + 1), board))
-
-    if c - 1 >= 0:
-        if c - 2 >= 0:
-            if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c - 2), board) != "FRIENDLY" and r_abs_dist == 1:
-                _moves.append(Move((current_r, c), (comparing_r, c - 2), board))
-        if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c - 1), board) != "FRIENDLY" and r_abs_dist == 2:
-            _moves.append(Move((current_r, c), (comparing_r, c - 1), board))
-    return _moves
-
-
-def get_knight_moves(r, c, board):
-    moves = []
-    if r - 1 >= 0:
-        if r - 2 >= 0:
-            moves.extend(column_knight_check(r, r - 2, 2, c, board))
-        moves.extend(column_knight_check(r, r - 1, 1, c, board))
-    if r + 1 < len(board):
-        if r + 2 < len(board):
-            moves.extend(column_knight_check(r, r + 2, 2, c, board))
-        moves.extend(column_knight_check(r, r + 1, 1, c, board))
-    return moves
-
-
-def diagonal_scan(r, c, board):
-    moves = []
-    vectors = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
-    for direction in vectors:
-        for i, row in enumerate(board[r]):
-            i += 1
-            dx = c + (i * direction[1])  # Column in list
-            dy = r + (i * direction[0])  # Row in list
-            if 0 <= dx < len(board) and 0 <= dy < len(board):
-                if board[dy][dx] == "--":
-                    moves.append(Move((r, c), (dy, dx), board))
-                else:
-                    our_turn = board[r][c][0]
-                    other_turn = board[dy][dx][0]
-                    if our_turn == other_turn:
-                        break
-                    else:
-                        moves.append(Move((r, c), (dy, dx), board))
-                        break
-            else:
-                break
-    return moves
-
-
-def horizontal_scan(r, c, board, reverse=False):
-    _moves = []
-
-    """
-    Row check"""
-    if not reverse:
-        for i in range(len(board[r][c:])):  # Scanning right
-            i += 1
-            if 0 <= c + i < len(board):
-                if board[r][c + i] == "--":
-                    _moves.append(Move((r, c), (r, c + i), board))
-                elif board[r][c + i] != "--":
-                    our_turn = board[r][c][0]
-                    other_turn = board[r][c + i][0]
-                    if our_turn == other_turn:
-                        break
-                    else:
-                        _moves.append(Move((r, c), (r, c + i), board))
-                        break
-            else:
-                break
-    else:
-        for i in range(len(board[r][:c + 1])):  # Scanning left
-            i += 1
-            if 0 <= c - i < len(board):
-                if board[r][c - i] == "--":
-                    _moves.append(Move((r, c), (r, c - i), board))
-                elif board[r][c - i] != "--":
-                    our_turn = board[r][c][0]
-                    other_turn = board[r][c - i][0]
-                    if our_turn == other_turn:
-                        break
-                    else:
-                        _moves.append(Move((r, c), (r, c - i), board))
-                        break
-            else:
-                break
-
-    """
-    Column check"""
-    if not reverse:
-        for i in range(len(board[r:])):  # Scan down the column
-            i += 1
-            if 0 <= r + i < len(board):
-                if board[r + i][c] == "--":
-                    _moves.append(Move((r, c), (r + i, c), board))
-                elif board[r + i][c] != "--":
-                    our_turn = board[r][c][0]
-                    other_turn = board[r + i][c][0]
-                    if our_turn == other_turn:
-                        break
-                    else:
-                        _moves.append(Move((r, c), (r + i, c), board))
-                        break
-            else:
-                break
-    else:
-        for i in range(len(board[:r])):  # Scan up the column
-            i += 1
-            if 0 <= r - i < len(board):
-                if board[r - i][c] == "--":
-                    _moves.append(Move((r, c), (r - i, c), board))
-                elif board[r - i][c] != "--":
-                    our_turn = board[r][c][0]
-                    other_turn = board[r - i][c][0]
-                    if our_turn == other_turn:
-                        break
-                    else:
-                        _moves.append(Move((r, c), (r - i, c), board))
-                        break
-    return _moves
-
-
-
-
-
-
-class Move:
-    # Computer notation to chess notation conversion
-    rank_to_row = {"8": 0, "7": 1, "6": 2, "5": 3, "4": 4,
-                   "3": 5, "2": 6, "1": 7}
-    row_to_rank = {v: k for k, v in rank_to_row.items()}
-    file_to_col = {"a": 0, "b": 1, "c": 2, "d": 3,
-                   "e": 4, "f": 5, "g": 6, "h": 7}
-    col_to_file = {v: k for k, v in file_to_col.items()}
-
-    def __init__(self, start_sq, end_sq, board, en_passant=None, castle=None):
-        self.start_sq = start_sq
-        self.end_sq = end_sq
-        self.start_row = start_sq[0]
-        self.start_col = start_sq[1]
-        self.end_row = end_sq[0]
-        self.end_col = end_sq[1]
-        self.en_passant = en_passant
-        self.castle = castle
-
-        self.piece_moved = board[self.start_row][self.start_col]
-        if en_passant is not None:
-            self.piece_captured = board[en_passant[0]][en_passant[1]]
-        elif castle is not None:
-            self.piece_captured = board[castle[0][0]][castle[0][1]]
-            self.rook_start_sq = self.castle[0]
-            self.rook_end_sq = self.castle[1]
-        else:
-            self.piece_captured = board[self.end_row][self.end_col]
-        self.id = str(self.start_row * 1000 + self.start_col * 100 + self.end_row * 10 + self.end_col)
-
-    def __eq__(self, other):
-        if self.id == other.id:
-            return True
-
-    def get_chess_notation(self):
-        return Move.col_to_file[self.start_col] + Move.row_to_rank[self.start_row] + Move.col_to_file[self.end_col] + Move.row_to_rank[self.end_row]
