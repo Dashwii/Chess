@@ -24,22 +24,7 @@ class Castle(Move):
         self.castle = castle
 
 
-def return_piece_moves(piece, occupied_square, board, move_log, castle_rights):
-    turn = piece[0]
-    piece_type = piece[1]
 
-    if piece_type == "P":
-        return get_pawn_moves(turn, occupied_square, board, move_log)
-    elif piece_type == "R":
-        return get_rook_moves(turn, occupied_square, board)
-    elif piece_type == "B":
-        return get_bishop_moves(turn, occupied_square, board)
-    elif piece_type == "N":
-        return get_knight_moves(turn, occupied_square, board)
-    elif piece_type == "Q":
-        return get_queen_moves(turn, occupied_square, board)
-    elif piece_type == "K":
-        return get_king_moves(turn, occupied_square, board, castle_rights)
 
 
 def en_passant_check(turn, enemy_square, move_log):
