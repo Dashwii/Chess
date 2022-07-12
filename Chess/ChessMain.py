@@ -19,9 +19,9 @@ Things I wanted refactored:
 p.init()
 p.mixer.init()
 move_sound = p.mixer.Sound("move_sound.mp3")
-WIDTH, HEIGHT = 1920, 1080
-BOARD_WIDTH = BOARD_HEIGHT = 1024
-SQ_SIZE = 128
+WIDTH, HEIGHT = 1280, 720
+BOARD_WIDTH = BOARD_HEIGHT = 512
+SQ_SIZE = 64
 FPS = 60
 CLOCK = p.time.Clock()
 IMAGES = {}
@@ -36,10 +36,11 @@ alpha_sq_surface.fill("yellow")
 BOARD_X = WIDTH // 2 - BOARD_WIDTH // 2
 BOARD_Y = HEIGHT // 2 - BOARD_HEIGHT // 2
 
-font = p.font.SysFont("Comic Sans MS", 50)
+font = p.font.SysFont("Comic Sans MS", 40)
 current_turn_text = font.render("Current Turn:", True, "white")
 white_text = font.render("White", True, "white")
 black_text = font.render("Black", True, "white")
+
 
 def load_images():
     # Load images once into a dictionary for later access.
@@ -337,10 +338,10 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_butto
                 if len(start_sq) and Move(start_sq, (i, j), gs.board).id in [d.id for d in gs.current_valid_moves]:
                     if gs.board[i][j] == "--":
                         p.draw.circle(screen, "dark gray",
-                                      (SQ_SIZE // 2 + BOARD_X + (j * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (i * SQ_SIZE)), 20)
+                                      (SQ_SIZE // 2 + BOARD_X + (j * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (i * SQ_SIZE)), 10)
                     else:
                         p.draw.circle(screen, "dark gray",
-                                      (SQ_SIZE // 2 + BOARD_X + (j * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (i * SQ_SIZE)), 60, width=12)
+                                      (SQ_SIZE // 2 + BOARD_X + (j * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (i * SQ_SIZE)), 30, width=6)
 
     elif board_flipping and not white_to_move:
         for i, r in enumerate(gs.board):
@@ -348,10 +349,10 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_butto
                 if len(start_sq) and Move((start_sq[0], start_sq[1]), (i, j), gs.board).id in [d.id for d in gs.current_valid_moves]:
                     if gs.board[i][j] == "--":
                         p.draw.circle(screen, "dark gray",
-                                      (SQ_SIZE // 2 + BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), 20)
+                                      (SQ_SIZE // 2 + BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), 10)
                     else:
                         p.draw.circle(screen, "dark gray",
-                                      (SQ_SIZE // 2 + BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), 60, width=12)
+                                      (SQ_SIZE // 2 + BOARD_X + (opposite_flipped_index(j) * SQ_SIZE), SQ_SIZE // 2 + BOARD_Y + (opposite_flipped_index(i) * SQ_SIZE)), 30, width=6)
 
     # Render pieces on the board
     if not board_flipping or white_to_move:
@@ -367,6 +368,8 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_butto
                 else:
                     if piece != "--":  # Render piece on board normally
                         screen.blit(IMAGES[piece], p.Rect(BOARD_X + (j * SQ_SIZE), BOARD_Y + (i * SQ_SIZE), SQ_SIZE, SQ_SIZE))
+        for piece in gs.board_data.piece_logs:
+            screen.blit(IMAGES[piece.piece], p.Rect(BOARD_X + (piece.column * SQ_SIZE), BOARD_Y + (piece.row * SQ_SIZE), SQ_SIZE, SQ_SIZE))
     elif board_flipping and not white_to_move:
         for i, r in enumerate(gs.board):
             for j, c in enumerate(r):
@@ -392,11 +395,11 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_butto
         if not board_flipping or white_to_move and not gs.pawn_promote:
             p.draw.rect(screen, "blue",
                         p.Rect(BOARD_X + (square_highlight_pos[1] if mouse_button_held_down else start_sq[1]) * SQ_SIZE,
-                               BOARD_Y + (square_highlight_pos[0] if mouse_button_held_down else start_sq[0]) * SQ_SIZE, SQ_SIZE, SQ_SIZE), 6)  # Invert row and columns to get actual screen representation of highlight position.
+                               BOARD_Y + (square_highlight_pos[0] if mouse_button_held_down else start_sq[0]) * SQ_SIZE, SQ_SIZE, SQ_SIZE), 3)  # Invert row and columns to get actual screen representation of highlight position.
         elif board_flipping and not white_to_move and not gs.pawn_promote:
             p.draw.rect(screen, "blue", p.Rect(BOARD_X + (opposite_flipped_index(square_highlight_pos[1]) if mouse_button_held_down else opposite_flipped_index(start_sq[1])) * SQ_SIZE,
                                                BOARD_Y + (opposite_flipped_index(square_highlight_pos[0]) if mouse_button_held_down else opposite_flipped_index(start_sq[0])) * SQ_SIZE,
-                                               SQ_SIZE, SQ_SIZE), 6)
+                                               SQ_SIZE, SQ_SIZE), 3)
     # Drag piece render
     if start_sq and mouse_button_held_down and not gs.pawn_promote:
         mouse_pos = p.mouse.get_pos()

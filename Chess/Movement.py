@@ -1,74 +1,33 @@
-
-
-
-
 # Squares that will be checked for castling
 KING_SIDE_VECTOR_SCANS = [(0, 1), (0, 2)]
 QUEEN_SIDE_VECTOR_SCANS = [(0, -1), (0, -2), (0, -3)]
 
 
-# class Move:
-#     # Computer notation to chess notation conversion
-#     rank_to_row = {"8": 0, "7": 1, "6": 2, "5": 3, "4": 4,
-#                    "3": 5, "2": 6, "1": 7}
-#     row_to_rank = {v: k for k, v in rank_to_row.items()}
-#     file_to_col = {"a": 0, "b": 1, "c": 2, "d": 3,
-#                    "e": 4, "f": 5, "g": 6, "h": 7}
-#     col_to_file = {v: k for k, v in file_to_col.items()}
-#
-#     def __init__(self, start_sq, end_sq, board, en_passant=None, castle=None):
-#         self.start_sq = start_sq
-#         self.end_sq = end_sq
-#         self.start_row = start_sq[0]
-#         self.start_col = start_sq[1]
-#         self.end_row = end_sq[0]
-#         self.end_col = end_sq[1]
-#         self.en_passant = en_passant
-#         self.castle = castle
-#
-#         self.piece_moved = board[self.start_row][self.start_col]
-#         if en_passant is not None:
-#             self.piece_captured = board[en_passant[0]][en_passant[1]]
-#         elif castle is not None:
-#             self.piece_captured = board[castle[0][0]][castle[0][1]]
-#             self.rook_start_sq = self.castle[0]
-#             self.rook_end_sq = self.castle[1]
-#         else:
-#             self.piece_captured = board[self.end_row][self.end_col]
-#         self.id = str(self.start_row * 1000 + self.start_col * 100 + self.end_row * 10 + self.end_col)
-#
-#     def __eq__(self, other):
-#         if self.id == other.id:
-#             return True
-#
-#     def get_chess_notation(self):
-#         return Move.col_to_file[self.start_col] + Move.row_to_rank[self.start_row] + Move.col_to_file[self.end_col] + Move.row_to_rank[self.end_row]
-
-
 class Move:
-    def __init__(self, start_sq, end_sq, board):
+    def __init__(self, start_sq, end_sq, board, en_passant=None, castle=None):
         self.start_sq = start_sq
         self.end_sq = end_sq
-        self.board = board
-        self.piece_moved = board[start_sq[0]][start_sq[1]]
-        self.piece_captured = board[end_sq[0]][end_sq[1]]
-        self.id = str(self.start_sq[0] * 1000 + self.start_sq[1] * 100 + self.end_sq[0] * 10 + self.end_sq[1])
+        self.start_row = self.start_sq[0]
+        self.start_col = self.start_sq[1]
+        self.end_row = self.end_sq[0]
+        self.end_col = self.end_sq[1]
+        self.en_passant = en_passant
+        self.castle = castle
 
+        self.piece_moved = board[self.start_sq[0]][self.start_sq[1]]
+        if en_passant is not None:
+            self.piece_captured = board[en_passant[0]][en_passant[1]]
+        elif castle is not None:
+            self.piece_captured = board[castle[0][0]][castle[0][1]]
+            self.rook_start_sq = self.castle[0]
+            self.rook_end_sq = self.castle[1]
+        else:
+            self.piece_captured = board[self.end_sq[0]][self.end_sq[1]]
+        self.id = str(self.start_sq[0] * 1000 + self.start_sq[1] * 100 + self.end_sq[0] * 10 + self.end_sq[1])
 
     def __eq__(self, other):
         return self.id == other.id
 
-
-class EnPassant(Move):
-    def __init__(self, start_sq, end_sq, board, en_passant):
-        super().__init__(start_sq, end_sq, board)
-        self.en_passant = en_passant
-
-
-class Castle(Move):
-    def __init__(self, start_sq, end_sq, board, castle):
-        super().__init__(start_sq, end_sq, board)
-        self.castle = castle
 
 
 def check_if_king_in_check(current_king_sq, enemy_moves):
@@ -81,13 +40,23 @@ def check_if_king_in_check(current_king_sq, enemy_moves):
         return False
 
 
-def get_king_square(turn, board):
+def get_king_square(turn, board, enemy=False):
     """
     Get the current square the king were searching for is on"""
-    for i, row in enumerate(board):
-        for j, col in enumerate(row):
-            if board[i][j] == turn + "K":
-                return i, j
+    if not enemy:
+        for i, row in enumerate(board):
+            for j, col in enumerate(row):
+                if board[i][j] == turn + "K":
+                    return i, j
+    else:
+        if turn == "w":
+            enemy_turn = "b"
+        else:
+            enemy_turn = "w"
+        for i, row in enumerate(board):
+            for j, col in enumerate(row):
+                if board[i][j] == enemy_turn + "K":
+                    return i, j
 
 
 def get_king_moves(turn, r, c, board, castling_rights):
@@ -196,10 +165,9 @@ def get_pawn_moves(r, c, board, move_log):
             moves.append(Move((r, c), (r + 2, c), board))
         if r + 1 < len(board) and board[r + 1][c] == "--":  # Go down the column from whites perspective
             moves.append(Move((r, c), (r + 1, c), board))
-        if (r + 1 < len(board) and 0 <= c - 1) and board[r + 1][c - 1] != "--" and board[r + 1][c - 1][0] == "w":
+        if (r + 1 < len(board) and 0 <= c - 1) and board[r + 1][c - 1][0] == "w":
             moves.append(Move((r, c), (r + 1, c - 1), board))
-        if (r + 1 < len(board) and c + 1 < len(board)) and board[r + 1][c + 1] != "--" and board[r + 1][c + 1][
-            0] == "w":
+        if (r + 1 < len(board) and c + 1 < len(board)) and board[r + 1][c + 1][0] == "w":
             moves.append(Move((r, c), (r + 1, c + 1), board))
         # En passant
         if 0 <= c - 1 and board[r][c - 1] == "wP":
@@ -246,20 +214,15 @@ def column_knight_check(current_r, comparing_r, r_abs_dist, c, board):
     _moves = []
     if c + 1 < len(board):
         if c + 2 < len(board):
-            if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c + 2),
-                                               board) != "FRIENDLY" and r_abs_dist == 1:
+            if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c + 2), board) != "FRIENDLY" and r_abs_dist == 1:
                 _moves.append(Move((current_r, c), (comparing_r, c + 2), board))
-        if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c + 1),
-                                           board) != "FRIENDLY" and r_abs_dist == 2:
+        if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c + 1), board) != "FRIENDLY" and r_abs_dist == 2:
             _moves.append(Move((current_r, c), (comparing_r, c + 1), board))
-
     if c - 1 >= 0:
         if c - 2 >= 0:
-            if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c - 2),
-                                               board) != "FRIENDLY" and r_abs_dist == 1:
+            if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c - 2), board) != "FRIENDLY" and r_abs_dist == 1:
                 _moves.append(Move((current_r, c), (comparing_r, c - 2), board))
-        if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c - 1),
-                                           board) != "FRIENDLY" and r_abs_dist == 2:
+        if check_if_square_has_enemy_piece((current_r, c), (comparing_r, c - 1), board) != "FRIENDLY" and r_abs_dist == 2:
             _moves.append(Move((current_r, c), (comparing_r, c - 1), board))
     return _moves
 
@@ -339,4 +302,3 @@ def moves_in_col_or_row(turn, r, c, board, vertical=False):
                 if i > r:
                     break
     return moves
-
