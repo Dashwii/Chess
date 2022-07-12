@@ -368,8 +368,6 @@ def draw_pieces(screen, gs, start_sq, board_flipping, white_to_move, mouse_butto
                 else:
                     if piece != "--":  # Render piece on board normally
                         screen.blit(IMAGES[piece], p.Rect(BOARD_X + (j * SQ_SIZE), BOARD_Y + (i * SQ_SIZE), SQ_SIZE, SQ_SIZE))
-        for piece in gs.board_data.piece_logs:
-            screen.blit(IMAGES[piece.piece], p.Rect(BOARD_X + (piece.column * SQ_SIZE), BOARD_Y + (piece.row * SQ_SIZE), SQ_SIZE, SQ_SIZE))
     elif board_flipping and not white_to_move:
         for i, r in enumerate(gs.board):
             for j, c in enumerate(r):
