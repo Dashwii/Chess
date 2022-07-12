@@ -1,3 +1,4 @@
+import pygame
 import pygame as p
 from ChessEngine import ChessEngine, Move, copy
 import cProfile
@@ -131,8 +132,56 @@ class GameOver:
             self.draw_text(screen, "Stalemate")
 
 
+class Highlighting:
+    """Class that will hold some extra information highlighted squares, movement, etc.
+    Intended to increase performance by storing some info instead of looping and searching all the time."""
+    def __init__(self):
+        pass
 
 
+
+class Game():
+    """Rewrite of main() to a class."""
+    def __init__(self):
+        self.running = True
+        self.gs = ChessEngine()
+        self.game_over = GameOver()
+        self.pawn_promote = PawnPromoteSelect()
+        self.highlights = Highlighting()
+        self.animations = AnimationHandler()
+        self.screen = SCREEN
+        self.mouse_button_held_down = False
+        self.board_flipping = True
+        self.board_flipping_was_on = False
+
+    def game_loop(self):
+        while self.running:
+            CLOCK.tick(FPS)
+            events = p.event.get()
+            for e in events:
+                if e.type == p.QUIT:
+                    self.running = False
+                if e.type == p.MOUSEBUTTONDOWN:
+                    self.mouse_button_held_down = True
+                if e.type == p.MOUSEBUTTONUP:
+                    self.mouse_button_held_down = False
+                if e.type == p.KEYDOWN:
+                    pass
+            self.screen.fill((64, 64, 64))
+            p.display.flip()
+
+    def draw_board(self):
+        pass
+
+    def draw_pieces(self):
+        pass
+
+    def handle_board_flip(self):
+        """
+        Method will be called when the board flips visually. This method will update some variable calculations to
+        simplify conditionals that depended on whether the board was flipped or not.
+        """
+        pass
 
 def main():
     load_images()
@@ -502,4 +551,7 @@ class MoveAnimation:
 
 
 if __name__ == "__main__":
-    main()
+    #main()
+    load_images()
+    game = Game()
+    game.game_loop()
