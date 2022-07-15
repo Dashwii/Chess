@@ -21,8 +21,8 @@ p.init()
 p.mixer.init()
 move_sound = p.mixer.Sound("move_sound.mp3")
 WIDTH, HEIGHT = 1280, 720
-BOARD_WIDTH = BOARD_HEIGHT = 512
-SQ_SIZE = 64
+BOARD_WIDTH = BOARD_HEIGHT = 640
+SQ_SIZE = 80
 FPS = 60
 CLOCK = p.time.Clock()
 IMAGES = {}
@@ -135,24 +135,77 @@ class GameOver:
 class Highlighting:
     """Class that will hold some extra information highlighted squares, movement, etc.
     Intended to increase performance by storing some info instead of looping and searching all the time."""
-    def __init__(self):
+    def __init__(self, game):
+        self.game = game
+        self.mouse_button_down = self.game.mouse_button_down
+        self.start_sq = self.game.start_sq
+        self.previous_start_sq = None
+        self.screen = self.game.screen
+        self.current_piece_sq_moves = []
+
+    def render(self):
+        self.render_red_hightlight()
+        self.render_blue_highlight()
+        self.render_piece_moves()
+
+    def render_last_move(self):
         pass
 
+    def render_piece_moves(self):
+        if len(self.game.start_sq) == 0:
+            self.current_piece_sq_moves = []
+            self.previous_start_sq = None
+
+        if len(self.game.start_sq) > 0 and self.previous_start_sq != self.game.start_sq:
+            self.current_piece_sq_moves = []
+            for i, row in enumerate(self.game.gs.board):
+                for j, col in enumerate(row):
+                    if len(self.game.start_sq) and Move(self.game.start_sq, (i, j), self.game.gs.board).id in [d.id for d in self.game.gs.current_valid_moves]:
+                        self.current_piece_sq_moves.append((i, j))
+            self.previous_start_sq = self.game.start_sq
+
+        for square in self.current_piece_sq_moves:
+            if self.game.gs.board[square[0]][square[1]] == "--":
+                p.draw.circle(self.screen, "dark gray",
+                              (SQ_SIZE // 2 + BOARD_X + self.game.index_adjustment(square[1]) * SQ_SIZE, SQ_SIZE // 2 + BOARD_Y + self.game.index_adjustment(square[0]) * SQ_SIZE), 10)
+            else:
+                p.draw.circle(self.screen, "dark gray",
+                              (SQ_SIZE // 2 + BOARD_X + self.game.index_adjustment(square[1]) * SQ_SIZE, SQ_SIZE // 2 + BOARD_Y + self.game.index_adjustment(square[0]) * SQ_SIZE), 40, width=6)
+
+    def render_red_highlight(self):
+        if len(self.game.start_sq) > 0:
+            p.draw.rect(self.screen, "red", p.Rect(BOARD_X + (self.game.index_adjustment(self.game.start_sq[1]) * SQ_SIZE),
+                        BOARD_Y + (self.game.index_adjustment(self.game.start_sq[0]) * SQ_SIZE),
+                        SQ_SIZE, SQ_SIZE))
+
+    def render_blue_highlight(self):
+        if len(self.game.start_sq) > 0:
+            square_highlight_pos = mouse_sq_coordinates(self.game.board_flipping, self.game.gs.white_to_move)
+            if len(square_highlight_pos) == 0 and self.game.mouse_button_down:
+                square_highlight_pos = (1000, 1000)  # Render square highlight off screen.
+            if not self.game.gs.pawn_promote:
+                p.draw.rect(self.screen, "blue",
+                            p.Rect(BOARD_X + (self.game.index_adjustment(square_highlight_pos[1]) * SQ_SIZE if self.game.mouse_button_down else self.game.index_adjustment(self.game.start_sq[1]) * SQ_SIZE),
+                                   BOARD_Y + (self.game.index_adjustment(square_highlight_pos[0]) * SQ_SIZE if self.game.mouse_button_down else self.game.index_adjustment(self.game.start_sq[0]) * SQ_SIZE),
+                                   SQ_SIZE, SQ_SIZE), 5)
 
 
-class Game():
+class Game:
     """Rewrite of main() to a class."""
     def __init__(self):
         self.running = True
+        self.mouse_button_down = True
+        self.board_flipping = True
+        self.board_flipping_was_on = False
+        self.start_sq = ()
+        self.player_click_count = 0
+        self.screen = SCREEN
+
         self.gs = ChessEngine()
         self.game_over = GameOver()
         self.pawn_promote = PawnPromoteSelect()
-        self.highlights = Highlighting()
+        self.highlights = Highlighting(self)
         self.animations = AnimationHandler()
-        self.screen = SCREEN
-        self.mouse_button_held_down = False
-        self.board_flipping = True
-        self.board_flipping_was_on = False
 
     def game_loop(self):
         while self.running:
@@ -162,26 +215,84 @@ class Game():
                 if e.type == p.QUIT:
                     self.running = False
                 if e.type == p.MOUSEBUTTONDOWN:
-                    self.mouse_button_held_down = True
+                    self.mouse_button_down = True
+                    end_pos_click = mouse_sq_coordinates(self.board_flipping, self.gs.white_to_move)
+                    if len(self.start_sq) == 0 and len(end_pos_click) == 2:
+                        if clicked_on_turn_piece(end_pos_click, self.gs):
+                            self.start_sq = end_pos_click
+                            self.player_click_count = 1
+                    else:
+                        if clicked_on_turn_piece(end_pos_click, self.gs) and self.start_sq != end_pos_click:
+                            self.start_sq = end_pos_click
+                            self.player_click_count = 1
+                        elif self.start_sq == end_pos_click:
+                            self.player_click_count += 1
+                        else:
+                            self.start_sq = ()
+                            self.player_click_count = 0
                 if e.type == p.MOUSEBUTTONUP:
-                    self.mouse_button_held_down = False
+                    self.mouse_button_down = False
+                    end_pos_click = mouse_sq_coordinates(self.board_flipping, self.gs.white_to_move)
+                    if len(self.start_sq) == 2 and len(end_pos_click) == 2 and end_pos_click != self.start_sq:
+                        valid = handle_move(self.start_sq, end_pos_click, self.gs, None)
+                        if valid:
+                            self.start_sq = ()
+                            self.player_click_count = 0
+                        else:
+                            self.player_click_count = 0
+                    elif len(end_pos_click) == 0:
+                        self.player_click_count = 0
                 if e.type == p.KEYDOWN:
-                    pass
+                    if e.key == p.K_f:
+                        self.board_flipping = not self.board_flipping
+                        print("Board flipping toggled.")
+            if self.player_click_count == 2 and not self.mouse_button_down:
+                self.start_sq = ()
+                self.player_click_count = 0
             self.screen.fill((64, 64, 64))
+            self.draw_board()
+            self.highlights.render()
+            self.draw_pieces()
             p.display.flip()
 
+    def index_adjustment(self, index):
+        """Pass any index you need from the board into here. Will return a flipped or still index depending on if the board
+        is flipped or not."""
+        if not self.board_flipping or self.gs.white_to_move:
+            return index
+        else:
+            return opposite_flipped_index(index)
+
     def draw_board(self):
-        pass
+        for i, r in enumerate(self.gs.board):
+            for j, c in enumerate(r):
+                if (i + j) % 2 == 0:
+                    p.draw.rect(self.screen, "white",
+                                p.Rect(BOARD_X + (self.index_adjustment(j) * SQ_SIZE), (BOARD_Y + (self.index_adjustment(i) * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
+                else:
+                    p.draw.rect(self.screen, "dark green",
+                                p.Rect(BOARD_X + (self.index_adjustment(j) * SQ_SIZE), (BOARD_Y + (self.index_adjustment(i) * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
 
     def draw_pieces(self):
-        pass
+        for i, r in enumerate(self.gs.board):
+            for j, c in enumerate(r):
+                piece = self.gs.board[i][j]
+                # In animation will either return False or a board square if our current square is "animating"
+                in_animation = self.animations.is_sq_in_end_sq_animation((i, j))
+                if piece != "--" and not ((i, j) == self.start_sq and self.mouse_button_down) and not self.gs.pawn_promote:
+                    self.screen.blit(IMAGES[piece], p.Rect(BOARD_X + (self.index_adjustment(j) * SQ_SIZE),
+                                                           BOARD_Y + (self.index_adjustment(i) * SQ_SIZE),
+                                                           SQ_SIZE, SQ_SIZE))
+                elif in_animation and in_animation != "--":
+                    self.screen.blit(IMAGES[in_animation], p.Rect(BOARD_X + (self.index_adjustment(j) * SQ_SIZE),
+                                                                  BOARD_Y + (self.index_adjustment(i) * SQ_SIZE), SQ_SIZE, SQ_SIZE))
+        if self.start_sq and self.mouse_button_down and not self.gs.pawn_promote:
+            pos = p.mouse.get_pos()
+            render_piece = self.gs.board[self.start_sq[0]][self.start_sq[1]]
+            if render_piece != "--":
+                self.screen.blit(IMAGES[render_piece], p.Rect(pos[0] - SQ_SIZE // 2,
+                                                              pos[1] - SQ_SIZE // 2, SQ_SIZE, SQ_SIZE))
 
-    def handle_board_flip(self):
-        """
-        Method will be called when the board flips visually. This method will update some variable calculations to
-        simplify conditionals that depended on whether the board was flipped or not.
-        """
-        pass
 
 def main():
     load_images()
