@@ -1,7 +1,7 @@
 from constants import *
 
 
-class Text:
+class CoordText:
     def __init__(self, text, color, font, size, pos):
         self.text = text
         self.color = color

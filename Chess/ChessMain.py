@@ -1,5 +1,5 @@
 from constants import *
-from text import Text
+from coordtext import CoordText
 from ChessEngine import ChessEngine, Move, copy
 
 
@@ -418,11 +418,11 @@ def coordinate_renders():
     black_text_render_objects = []
     for i, (num, letter) in enumerate(zip(nums, letters)):
         # White perspective
-        w_rank = Text(num, DARK_SQ if i % 2 == 0 else "white", coordinate_font, None, (BOARD_X, BOARD_Y + (i * SQ_SIZE)))
-        w_file = Text(letter, DARK_SQ if i % 2 == 1 else "white", coordinate_font, None, (BOARD_X + ((i + 1) * SQ_SIZE), BOARD_Y + (8 * SQ_SIZE)))
+        w_rank = CoordText(num, DARK_SQ if i % 2 == 0 else "white", coordinate_font, None, (BOARD_X, BOARD_Y + (i * SQ_SIZE)))
+        w_file = CoordText(letter, DARK_SQ if i % 2 == 1 else "white", coordinate_font, None, (BOARD_X + ((i + 1) * SQ_SIZE), BOARD_Y + (8 * SQ_SIZE)))
         # Black perspective
-        b_rank = Text(nums[opposite_flipped_index(i)], DARK_SQ if i % 2 == 0 else LIGHT_SQ, coordinate_font, None, (BOARD_X, BOARD_Y + (i * SQ_SIZE)))
-        b_file = Text(letters[opposite_flipped_index(i)], DARK_SQ if i % 2 == 1 else LIGHT_SQ, coordinate_font, None, (BOARD_X + ((i + 1) * SQ_SIZE), BOARD_Y + (8 * SQ_SIZE)))
+        b_rank = CoordText(nums[opposite_flipped_index(i)], DARK_SQ if i % 2 == 0 else LIGHT_SQ, coordinate_font, None, (BOARD_X, BOARD_Y + (i * SQ_SIZE)))
+        b_file = CoordText(letters[opposite_flipped_index(i)], DARK_SQ if i % 2 == 1 else LIGHT_SQ, coordinate_font, None, (BOARD_X + ((i + 1) * SQ_SIZE), BOARD_Y + (8 * SQ_SIZE)))
 
         white_text_render_objects.append((w_rank, w_file))
         black_text_render_objects.append((b_rank, b_file))
