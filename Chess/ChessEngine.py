@@ -58,6 +58,7 @@ class ChessEngine:
         if move.piece_moved[1] in ("K", "R"):
             self.castling_work(move)
         self.board[move.end_row][move.end_col] = move.piece_moved
+        self.move_log.append(move)
 
         # Pawn promotion
         # If a pawn_promotion is eligible return out early. Once we get input we'll update our moves and the turn. (May need to break this function up to check for checkmates as well after pawn_promotion)
