@@ -1,6 +1,3 @@
-from constants import *
-
-
 class CoordText:
     def __init__(self, text, color, font, size, pos):
         self.text = text
