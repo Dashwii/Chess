@@ -19,7 +19,7 @@ class AnimationHandler:
     def update_animations(self):
         animations_still_in_progress = []
         for animation in self.in_progress_animations:
-            animation.animate(self.game.screen, self.game.board_flipping, self.game.gs.white_to_move)
+            animation.animate(self.game.screen, self.game.perspective)
             if not animation.animation_done:
                 animations_still_in_progress.append(animation)
             else:
@@ -77,14 +77,14 @@ class MoveAnimation:
     def reverse_animation(self):
         pass
 
-    def animate(self, screen, board_flipping, white_to_move):
-        if not board_flipping or white_to_move:
+    def animate(self, screen, perspective):
+        if perspective == "WHITE":
             screen.blit(self.image, self.rect)
-        elif board_flipping and not white_to_move:
+        else:
             temp_rect = copy.deepcopy(self.rect)
             temp_rect.x = (WIDTH - self.rect.x) - SQ_SIZE  # Subtract SQ_SIZE from the reflection calculation because squares aren't centered in their position. So we need to subtract for the reflection to not extend by 1 square.
             temp_rect.y = (HEIGHT - self.rect.y) - SQ_SIZE  # Subtract SQ_SIZE from the reflection calculation because squares aren't centered in their position. So we need to subtract for the reflection to not extend by 1 square.
-            screen.blit(self.image,temp_rect)
+            screen.blit(self.image, temp_rect)
         self.update_position()
         if self.rect.x == self.end_x and self.rect.y == self.end_y:
             move_sound.play()
@@ -93,7 +93,8 @@ class MoveAnimation:
 
 
 class PawnPromoteSelect:
-    def __init__(self):
+    def __init__(self, game):
+        self.game = game
         self.padding = 50
         self.queen_box = p.Rect(1600, self.padding + 100, 128, 128)
         self.rook_box = p.Rect(1600, self.padding * 2 + 228, 128, 128)
@@ -114,7 +115,7 @@ class PawnPromoteSelect:
         screen.blit(IMAGES[current_turn + "N"], self.knight_box)
         screen.blit(IMAGES[current_turn + "B"], self.bishop_box)
 
-    def game_loop(self, screen, white_to_move, events):
+    def game_loop(self, events):
         for event in events:
             if event.type == p.MOUSEBUTTONDOWN:
                 pos = p.mouse.get_pos()
@@ -126,7 +127,7 @@ class PawnPromoteSelect:
                     self.selected_promotion = "N"
                 elif self.bishop_box.collidepoint(pos):
                     self.selected_promotion = "B"
-        self.render_images(screen, white_to_move)
+        self.render_images(self.game.screen, self.game.gs.white_to_move)
         return None
 
 
@@ -186,17 +187,17 @@ class Highlighting:
         self.current_piece_sq_moves = []
 
     def render(self):
-        self.render_red_highlight()
+        self.render_blue_highlight()
         self.render_last_move()
         self.render_piece_move_squares()
-        self.render_blue_highlight()
+        self.render_drag_highlight()
 
     def render_last_move(self):
         if len(self.game.gs.move_log) > 0:
             start_sq = self.game.gs.move_log[-1].start_sq
             end_sq = self.game.gs.move_log[-1].end_sq
-            self.screen.blit(alpha_sq_surface, (BOARD_X + self.game.index_adjustment(start_sq[1]) * SQ_SIZE, BOARD_Y + self.game.index_adjustment(start_sq[0]) * SQ_SIZE))
-            self.screen.blit(alpha_sq_surface, (BOARD_X + self.game.index_adjustment(end_sq[1]) * SQ_SIZE, BOARD_Y + self.game.index_adjustment(end_sq[0]) * SQ_SIZE))
+            self.screen.blit(alpha_sq_surface_yellow, (BOARD_X + self.game.index_adjustment(start_sq[1]) * SQ_SIZE, BOARD_Y + self.game.index_adjustment(start_sq[0]) * SQ_SIZE))
+            self.screen.blit(alpha_sq_surface_yellow, (BOARD_X + self.game.index_adjustment(end_sq[1]) * SQ_SIZE, BOARD_Y + self.game.index_adjustment(end_sq[0]) * SQ_SIZE))
 
     def render_piece_move_squares(self):
         if len(self.game.start_sq) == 0:
@@ -227,29 +228,29 @@ class Highlighting:
                 self.game.screen.blit(alpha_circle_surface,
                                  (BOARD_X + (self.game.index_adjustment(square[1]) * SQ_SIZE), BOARD_Y + (self.game.index_adjustment(square[0]) * SQ_SIZE)))
 
-    def render_red_highlight(self):
+    def render_blue_highlight(self):
         if len(self.game.start_sq) > 0:
-            p.draw.rect(self.screen, "red", p.Rect(BOARD_X + (self.game.index_adjustment(self.game.start_sq[1]) * SQ_SIZE),
+            p.draw.rect(self.screen, (150, 150, 255), p.Rect(BOARD_X + (self.game.index_adjustment(self.game.start_sq[1]) * SQ_SIZE),
                         BOARD_Y + (self.game.index_adjustment(self.game.start_sq[0]) * SQ_SIZE),
                         SQ_SIZE, SQ_SIZE))
 
-    def render_blue_highlight(self):
+    def render_drag_highlight(self):
         if len(self.game.start_sq) > 0:
-            square_highlight_pos = mouse_sq_coordinates(self.game.board_flipping, self.game.gs.white_to_move)
-            if len(square_highlight_pos) == 0 and self.game.mouse_button_down:
+            square_highlight_pos = mouse_sq_coordinates(self.game.perspective)
+            if len(square_highlight_pos) == 0 or square_highlight_pos == self.game.start_sq:
                 square_highlight_pos = (1000, 1000)  # Render square highlight off screen.
-            if not self.game.gs.pawn_promote:
-                p.draw.rect(self.screen, "blue",
+            if not self.game.gs.pawn_promote and self.game.mouse_button_down:
+                p.draw.rect(self.screen, "gray",
                             p.Rect(BOARD_X + (self.game.index_adjustment(square_highlight_pos[1]) * SQ_SIZE if self.game.mouse_button_down else self.game.index_adjustment(self.game.start_sq[1]) * SQ_SIZE),
                                    BOARD_Y + (self.game.index_adjustment(square_highlight_pos[0]) * SQ_SIZE if self.game.mouse_button_down else self.game.index_adjustment(self.game.start_sq[0]) * SQ_SIZE),
                                    SQ_SIZE, SQ_SIZE), 5)
 
 
 class Game:
-    """Rewrite of main() to a class."""
     def __init__(self):
         self.running = True
         self.mouse_button_down = True
+        self.perspective = "WHITE"
         self.board_flipping = True
         self.board_flipping_was_on = False
         self.start_sq = ()
@@ -258,10 +259,14 @@ class Game:
 
         self.gs = ChessEngine()
         self.game_over = GameOver()
-        self.pawn_promote = PawnPromoteSelect()
+        self.pawn_promote = PawnPromoteSelect(self)
         self.highlights = Highlighting(self)
         self.animations = AnimationHandler(self)
         self.cords = coordinate_renders()
+
+        self.players = {"Player_1": [True, None], "Player_2": [True, None]}  # Player 1 always set on unless AI v AI.
+        if not (self.players["Player_1"] and self.players["Player_2"]):
+            self.board_flipping = False
 
     def game_loop(self):
         while self.running:
@@ -272,7 +277,7 @@ class Game:
                     self.running = False
                 if e.type == p.MOUSEBUTTONDOWN:
                     self.mouse_button_down = True
-                    end_pos_click = mouse_sq_coordinates(self.board_flipping, self.gs.white_to_move)
+                    end_pos_click = mouse_sq_coordinates(self.perspective)
                     if len(self.start_sq) == 0 and len(end_pos_click) == 2:
                         if clicked_on_turn_piece(end_pos_click, self.gs):
                             self.start_sq = end_pos_click
@@ -290,7 +295,7 @@ class Game:
                             self.player_click_count = 0
                 if e.type == p.MOUSEBUTTONUP:
                     self.mouse_button_down = False
-                    end_pos_click = mouse_sq_coordinates(self.board_flipping, self.gs.white_to_move)
+                    end_pos_click = mouse_sq_coordinates(self.perspective)
                     if len(self.start_sq) == 2 and len(end_pos_click) == 2 and end_pos_click != self.start_sq:
                         valid = self.handle_move(end_pos_click, dragged=True)
                         if valid:
@@ -309,6 +314,10 @@ class Game:
                         else:
                             print("Board flipping toggled off.")
                     if e.key == p.K_z:
+                        if self.perspective == "WHITE":
+                            self.perspective = "BLACK"
+                        else:
+                            self.perspective = "WHITE"
                         self.start_sq = ()
                         self.gs.undo_move()
             if self.player_click_count == 2 and not self.mouse_button_down:
@@ -319,12 +328,19 @@ class Game:
             self.highlights.render()
             self.draw_pieces()
             self.animations.update_animations()
+            self.game_states_management(events)
             p.display.flip()
+
+    def game_states_management(self, events):
+        if self.gs.pawn_promote:
+            self.pawn_promote.game_loop(events)
+            if self.pawn_promote.selected_promotion is not None:
+                self.gs.pawn_promote(self.pawn_promote.selected_promotion)
 
     def index_adjustment(self, index):
         """Pass any index you need from the board into here. Will return a flipped or still index depending on if the board
         is flipped or not."""
-        if not self.board_flipping or self.gs.white_to_move:
+        if self.perspective == "WHITE":
             return index
         else:
             return opposite_flipped_index(index)
@@ -340,10 +356,10 @@ class Game:
                     p.draw.rect(self.screen, DARK_SQ,
                                 p.Rect(BOARD_X + (self.index_adjustment(j) * SQ_SIZE), (BOARD_Y + (self.index_adjustment(i) * SQ_SIZE)), SQ_SIZE, SQ_SIZE))
         for i in range(8):
-            if self.gs.white_to_move or not self.board_flipping:
+            if self.perspective == "WHITE":
                 self.cords[0][i][0].render(self.screen)
                 self.cords[0][i][1].render(self.screen, subtract_self=True)
-            elif not self.gs.white_to_move and self.board_flipping:
+            else:
                 self.cords[1][i][0].render(self.screen)
                 self.cords[1][i][1].render(self.screen, subtract_self=True)
 
@@ -359,7 +375,7 @@ class Game:
                     else:
                         self.screen.blit(IMAGES[in_animation], p.Rect(BOARD_X + (self.index_adjustment(j) * SQ_SIZE),
                                                                       BOARD_Y + (self.index_adjustment(i) * SQ_SIZE), SQ_SIZE, SQ_SIZE))
-                elif piece != "--" and not ((i, j) == self.start_sq and self.mouse_button_down) and not self.gs.pawn_promote:
+                elif piece != "--" and not ((i, j) == self.start_sq and self.mouse_button_down):
                     self.screen.blit(IMAGES[piece], p.Rect(BOARD_X + (self.index_adjustment(j) * SQ_SIZE),
                                                            BOARD_Y + (self.index_adjustment(i) * SQ_SIZE),
                                                            SQ_SIZE, SQ_SIZE))
@@ -379,6 +395,10 @@ class Game:
                 else:
                     self.animations.add_animation(move)
                 self.gs.do_move(move)
+                if self.perspective == "WHITE":
+                    self.perspective = "BLACK"
+                else:
+                    self.perspective = "WHITE"
                 return True
         return False
 
@@ -393,15 +413,15 @@ def clicked_on_turn_piece(click, gs):
     return False
 
 
-def mouse_sq_coordinates(board_flipping, white_to_move):
+def mouse_sq_coordinates(perspective):
     click_pos = p.mouse.get_pos()
     if BOARD_X < click_pos[0] < BOARD_X + BOARD_WIDTH:
         if BOARD_Y < click_pos[1] < BOARD_Y + BOARD_HEIGHT:  # Check if area player clicked is in the chess board
-            if not board_flipping or white_to_move:
+            if perspective == "WHITE":
                 row_clicked = (click_pos[1] - BOARD_Y) // SQ_SIZE
                 col_clicked = (click_pos[0] - BOARD_X) // SQ_SIZE
                 return row_clicked, col_clicked
-            elif board_flipping and not white_to_move:
+            else:
                 row_clicked = opposite_flipped_index((click_pos[1] - BOARD_Y) // SQ_SIZE)
                 col_clicked = opposite_flipped_index((click_pos[0] - BOARD_X) // SQ_SIZE)
                 return row_clicked, col_clicked

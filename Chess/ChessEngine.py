@@ -32,8 +32,8 @@ class PieceLog:
 class ChessEngine:
     def __init__(self):
         self.board = [
-            ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
-            ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
+            ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "--"],
+            ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "wP"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
             ["--", "--", "--", "--", "--", "--", "--", "--"],
@@ -95,8 +95,6 @@ class ChessEngine:
     """
     Work that needs to be done on a new turn."""
     def next_turn_work(self):
-        if self.pawn_promote:
-            self.pawn_promote = False
 
         self.white_to_move = not self.white_to_move
         self.current_valid_moves = self.get_valid_moves()
@@ -119,9 +117,11 @@ class ChessEngine:
     """
         Promotes a pawn to the piece chosen"""
 
-    def promote(self, pawn_sq, piece_wanted):
+    def promote(self, piece_wanted):
+        pawn_sq = self.move_log[-1].end_sq
         turn = self.board[pawn_sq[0]][pawn_sq[1]][0]
         self.board[pawn_sq[0]][pawn_sq[1]] = turn + piece_wanted
+        self.pawn_promote = False
         print("Piece promoted!")
 
 

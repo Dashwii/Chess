@@ -12,9 +12,9 @@ IMAGES = {}
 SCREEN = p.display.set_mode((WIDTH, HEIGHT))
 
 
-alpha_sq_surface = p.Surface((SQ_SIZE, SQ_SIZE))
-alpha_sq_surface.set_alpha(150)
-alpha_sq_surface.fill((215, 202, 68))
+alpha_sq_surface_yellow = p.Surface((SQ_SIZE, SQ_SIZE))
+alpha_sq_surface_yellow.set_alpha(150)
+alpha_sq_surface_yellow.fill((215, 202, 68))
 alpha_circle_surface = p.Surface((SQ_SIZE, SQ_SIZE), p.SRCALPHA)
 alpha_circle_surface.set_alpha(175)
 
