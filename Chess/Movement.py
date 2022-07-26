@@ -29,7 +29,6 @@ class Move:
         return self.id == other.id
 
 
-
 def check_if_king_in_check(current_king_sq, enemy_moves):
     """
     Check if the king were searching for is in check"""
@@ -59,7 +58,7 @@ def get_king_square(turn, board, enemy=False):
                     return i, j
 
 
-def get_king_moves(turn, r, c, board, castling_rights):
+def get_king_moves(r, c, turn, board, castling_rights):
     moves = []
     vectors = [(-1, -1), (0, -1), (-1, 0), (1, 0), (0, 1), (-1, 1), (1, -1), (1, 1)]
     for direction in vectors:
@@ -74,7 +73,7 @@ def get_king_moves(turn, r, c, board, castling_rights):
 
     # Castling
     if turn == "w":
-        if castling_rights["W_King_Side"]:
+        if castling_rights["w_king_castle"]:
             for vector in KING_SIDE_VECTOR_SCANS:
                 if c + vector[1] < len(board):
                     if board[r + vector[0]][c + vector[1]] != "--":
@@ -83,14 +82,14 @@ def get_king_moves(turn, r, c, board, castling_rights):
                     break
             else:
                 moves.append(Move((r, c), (r, c + 2), board, castle=[(r, 7), (r, 5)]))
-        if castling_rights["W_Queen_Side"]:
+        if castling_rights["w_queen_castle"]:
             for vector in QUEEN_SIDE_VECTOR_SCANS:
                 if board[r + vector[0]][c + vector[1]] != "--":
                     break
             else:
                 moves.append(Move((r, c), (r, c - 2), board, castle=[(r, 0), (r, 3)]))
     else:
-        if castling_rights["B_King_Side"]:
+        if castling_rights["b_king_castle"]:
             for vector in KING_SIDE_VECTOR_SCANS:
                 if c + vector[1] < len(board):
                     if board[r + vector[0]][c + vector[1]] != "--":
@@ -99,7 +98,7 @@ def get_king_moves(turn, r, c, board, castling_rights):
                     break
             else:
                 moves.append(Move((r, c), (r, c + 2), board, castle=[(r, 7), (r, 5)]))
-        if castling_rights["B_Queen_Side"]:
+        if castling_rights["b_queen_castle"]:
             for vector in QUEEN_SIDE_VECTOR_SCANS:
                 if board[r + vector[0]][c + vector[1]] != "--":
                     break
@@ -117,23 +116,23 @@ def get_queen_moves(r, c, board):
     return moves
 
 
-def en_passant_check(turn, enemy_r_c, move_log):
-    if len(move_log) == 0:
+def en_passant_check(turn, enemy_r_c, last_move):
+    if last_move is None:
         return
 
     if turn == "w":
-        if move_log[-1].end_row == 3 and move_log[-1].start_row == 1 and enemy_r_c == move_log[-1].end_sq:
+        if last_move.end_row == 3 and last_move.start_row == 1 and enemy_r_c == last_move.end_sq:
             return True
         else:
             return False
     else:
-        if move_log[-1].end_row == 4 and move_log[-1].start_row == 6 and enemy_r_c == move_log[-1].end_sq:
+        if last_move.end_row == 4 and last_move.start_row == 6 and enemy_r_c == last_move.end_sq:
             return True
         else:
             return False
 
 
-def get_pawn_moves(r, c, board, move_log):
+def get_pawn_moves(r, c, board, last_move):
     """
     Returns all moves for the pawn piece in the row and column. Will search for diagonal captures and vertical movement."""
 
@@ -153,10 +152,10 @@ def get_pawn_moves(r, c, board, move_log):
             moves.append(Move((r, c), (r - 1, c + 1), board))
         # En passant
         if 0 <= c - 1 and board[r][c - 1] == "bP":
-            if en_passant_check("w", (r, c - 1), move_log):
+            if en_passant_check("w", (r, c - 1), last_move):
                 moves.append(Move((r, c), (r - 1, c - 1), board, en_passant=(r, c - 1)))  # Right scan
         if c + 1 < len(board) and board[r][c + 1] == "bP":
-            if en_passant_check("w", (r, c + 1), move_log):
+            if en_passant_check("w", (r, c + 1), last_move):
                 moves.append(Move((r, c), (r - 1, c + 1), board, en_passant=(r, c + 1)))  # Left scan
 
     else:
@@ -171,10 +170,10 @@ def get_pawn_moves(r, c, board, move_log):
             moves.append(Move((r, c), (r + 1, c + 1), board))
         # En passant
         if 0 <= c - 1 and board[r][c - 1] == "wP":
-            if en_passant_check("b", (r, c - 1), move_log):
+            if en_passant_check("b", (r, c - 1), last_move):
                 moves.append(Move((r, c), (r + 1, c - 1), board, en_passant=(r, c - 1)))
         if c + 1 < len(board) and board[r][c + 1] == "wP":
-            if en_passant_check("b", (r, c + 1), move_log):
+            if en_passant_check("b", (r, c + 1), last_move):
                 moves.append(Move((r, c), (r + 1, c + 1), board, en_passant=(r, c + 1)))
     return moves
 
@@ -302,3 +301,104 @@ def moves_in_col_or_row(turn, r, c, board, vertical=False):
                 if i > r:
                     break
     return moves
+
+
+def check_king_pawn_check(turn, king_sq, board):
+    r, c = king_sq
+    if board[r - 1][c - 1][1] != "P":
+        return False
+    if turn == "w":
+
+        if (0 <= r - 1 and 0 <= c - 1) and board[r - 1][c - 1][0] == "b":
+            return True
+        if (0 <= r - 1 and c + 1 < len(board)) and board[r - 1][c + 1][0] == "b":
+            return True
+    else:
+        if (r + 1 < len(board) and 0 <= c - 1) and board[r + 1][c - 1][0] == "w":
+            return True
+        if (r + 1 < len(board) and c + 1 < len(board)) and board[r + 1][c + 1][0] == "w":
+            return True
+    return False
+
+
+def check_king_horizontal_check(turn, king_sq, board):
+    return move_in_col_or_row_king_check(turn, king_sq, board)
+
+
+def check_king_vertical_check(turn, king_sq, board):
+    return move_in_col_or_row_king_check(turn, king_sq, board, vertical=True)
+
+
+def check_king_diagonal_check(turn, king_sq, board):
+    r, c = king_sq
+    vectors = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+    for direction in vectors:
+        for i, row in enumerate(board[r]):
+            i += 1
+            dx = c + (i * direction[1])
+            dy = r + (i * direction[0])
+            if 0 <= dx < len(board) and 0 <= dy < len(board):
+                if board[dy][dx][0] == turn:  # Friendly piece blocking
+                    break
+                elif board[dy][dx] != "--" and board[dy][dx][0] != turn and (board[dy][dx][1] != "B" and board[dy][dx][1] != "Q"):  # Enemy non rook/queen blocking.
+                    break
+                elif board[dy][dx][0] != turn and board[dy][dx][1] == "B" or board[dy][dx][1] == "Q":  # Enemy Queen/Rook attacking
+                    return True
+    else:
+        return False
+
+
+def check_king_knight_check(turn, king_sq, board):
+    r, c = king_sq
+    squares = [(-2, -1), (-1, -2), (-2, 1), (-1, 2), (1, -2), (2, -1), (1, 2), (2, 1)]
+    for square in squares:
+        dx = c + square[1]
+        dy = r + square[0]
+        if 0 < dx < len(board) and 0 < dy < len(board):
+            if board[dy][dx][0] != turn and board[dy][dx][1] == "N":
+                return True
+    return False
+
+
+def move_in_col_or_row_king_check(turn, king_sq, board, vertical=False):
+    r, c = king_sq
+    if not vertical:
+        check_spot = None
+        for i, square in enumerate(board[r]):
+            if square != "--" and square[0] == turn:
+                if check_spot is not None:
+                    if (check_spot < i < c) or (c > i > check_spot):
+                        check_spot = None
+                elif check_spot is None and c < i:
+                    return False
+            elif square != "--" and square[0] != turn and not (square[1] == "R" or square[1] == "Q"):
+                if check_spot is not None:
+                    if (check_spot < i < c) or (c > i > check_spot):
+                        check_spot = None
+            elif square != "--" and square[0] != turn and (square[1] == "R" or square[1] == "Q"):
+                if check_spot:
+                    return True # Double side check attack
+                else:
+                    check_spot = i
+        return False if check_spot is None else True
+    else:
+        col_list = [r[c] for r in board]
+        check_spot = None
+        for i, square in enumerate(col_list):
+            if square != "--" and square[0] == turn:
+                if check_spot is not None:
+                    if (check_spot < i < r) or (r > i > check_spot):
+                        check_spot = None
+                elif check_spot is None and r < i:
+                    return False
+            elif square != "--" and square[0] != turn and not (square[1] == "R" or square[1] == "Q"):
+                if check_spot is not None:
+                    if (check_spot < i < r) or (r > i > check_spot):
+                        check_spot = None
+            elif square != "--" and square[0] != turn and (square[1] == "R" or square[1] == "Q"):
+                if check_spot:
+                    return True # Double side check attack
+                else:
+                    check_spot = i
+        return False if check_spot is None else True
+

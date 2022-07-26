@@ -1,13 +1,14 @@
 from constants import *
-from coordtext import CoordText
-from ChessEngine import ChessEngine, Move, copy
+from ChessEngine import ChessEngine, Move, PREVIOUS_GAME_STATES
+from AI import find_best_move
+import time
 
 
 def load_images():
     # Load images once into a dictionary for later access.
     pieces = ["bR", "bN", "bB", "bQ", "bK", "bP", "wR", "wN", "wB", "wQ", "wK", "wP"]
     for piece in pieces:
-        IMAGES[piece] = p.transform.scale(p.image.load(f"images/{piece}.png"), (SQ_SIZE, SQ_SIZE))
+        IMAGES[piece] = p.image.load(f"images/{piece}.png")
 
 
 class AnimationHandler:
@@ -50,7 +51,7 @@ class MoveAnimation:
         self.end_x = BOARD_X + self.move.end_sq[1] * SQ_SIZE
         self.end_y = BOARD_Y + self.move.end_sq[0] * SQ_SIZE
         self.rect = p.Rect(BOARD_X + self.move.start_sq[1]*SQ_SIZE, BOARD_Y + self.move.start_sq[0]*SQ_SIZE, SQ_SIZE, SQ_SIZE)
-        self.speed = 10  #  Used to be 20
+        self.speed = ANIMATION_SPEED
 
         self.image = IMAGES[self.move.piece_moved]
         self.animation_done = False
@@ -74,22 +75,36 @@ class MoveAnimation:
             if self.rect.y < self.end_y:
                 self.rect.y = self.end_y
 
-    def reverse_animation(self):
-        pass
-
     def animate(self, screen, perspective):
         if perspective == "WHITE":
             screen.blit(self.image, self.rect)
         else:
             temp_rect = copy.deepcopy(self.rect)
             temp_rect.x = (WIDTH - self.rect.x) - SQ_SIZE  # Subtract SQ_SIZE from the reflection calculation because squares aren't centered in their position. So we need to subtract for the reflection to not extend by 1 square.
-            temp_rect.y = (HEIGHT - self.rect.y) - SQ_SIZE  # Subtract SQ_SIZE from the reflection calculation because squares aren't centered in their position. So we need to subtract for the reflection to not extend by 1 square.
+            temp_rect.y = (HEIGHT - self.rect.y) - SQ_SIZE  # Same as above.
             screen.blit(self.image, temp_rect)
         self.update_position()
         if self.rect.x == self.end_x and self.rect.y == self.end_y:
             move_sound.play()
             self.animation_done = True
             pass
+
+
+class CoordText:
+    def __init__(self, text, color, font, pos):
+        self.text = text
+        self.color = color
+        self.font = font
+        self.pos = pos
+
+        self.t_render = self.font.render(self.text, True, self.color)
+
+    def render(self, screen, subtract_self=False):
+        if subtract_self:
+            screen.blit(self.t_render, (self.pos[0] - self.t_render.get_width() - 5,
+                                        self.pos[1] - self.t_render.get_height() - 5))  # Subtract 8 to give more breathing room
+        else:
+            screen.blit(self.t_render, (self.pos[0], self.pos[1]))
 
 
 class PawnPromoteSelect:
@@ -193,9 +208,9 @@ class Highlighting:
         self.render_drag_highlight()
 
     def render_last_move(self):
-        if len(self.game.gs.move_log) > 0:
-            start_sq = self.game.gs.move_log[-1].start_sq
-            end_sq = self.game.gs.move_log[-1].end_sq
+        if self.game.gs.last_move is not None:
+            start_sq = self.game.gs.last_move.start_sq
+            end_sq = self.game.gs.last_move.end_sq
             self.screen.blit(alpha_sq_surface_yellow, (BOARD_X + self.game.index_adjustment(start_sq[1]) * SQ_SIZE, BOARD_Y + self.game.index_adjustment(start_sq[0]) * SQ_SIZE))
             self.screen.blit(alpha_sq_surface_yellow, (BOARD_X + self.game.index_adjustment(end_sq[1]) * SQ_SIZE, BOARD_Y + self.game.index_adjustment(end_sq[0]) * SQ_SIZE))
 
@@ -215,16 +230,14 @@ class Highlighting:
         for square in self.current_piece_sq_moves:
             if self.game.gs.board[square[0]][square[1]] == "--":
                 alpha_circle_surface.fill(0)
-                circle_radius = 12
-                p.draw.circle(alpha_circle_surface, "dark gray", ((alpha_circle_surface.get_width() // 2), alpha_circle_surface.get_height() // 2), circle_radius)
+                p.draw.circle(alpha_circle_surface, "dark gray", ((alpha_circle_surface.get_width() // 2), alpha_circle_surface.get_height() // 2), MOVE_CIRCLE_RADIUS)
                 self.game.screen.blit(alpha_circle_surface, (BOARD_X + (self.game.index_adjustment(square[1]) * SQ_SIZE), BOARD_Y + (self.game.index_adjustment(square[0]) * SQ_SIZE)))
             else:
-                alpha_circle_surface.fill(0) # This operation may be costly, I'm not sure. But if we don't clear the canvas. Capture circles will appear on empty squares. Due to the
-                                             # same canvas being used for both blits.
-                circle_radius = 40
+                alpha_circle_surface.fill(0)  # This operation may be costly, I'm not sure. But if we don't clear the canvas. Capture circles will appear on empty squares. Due to the
+                                              # same canvas being used for both blits.
                 p.draw.circle(alpha_circle_surface, "dark gray",
                               ((alpha_circle_surface.get_width() // 2), alpha_circle_surface.get_height() // 2),
-                              circle_radius, width=6)
+                              MOVE_CAPTURE_RADIUS, width=MOVE_CAPTURE_WIDTH)
                 self.game.screen.blit(alpha_circle_surface,
                                  (BOARD_X + (self.game.index_adjustment(square[1]) * SQ_SIZE), BOARD_Y + (self.game.index_adjustment(square[0]) * SQ_SIZE)))
 
@@ -239,7 +252,7 @@ class Highlighting:
             square_highlight_pos = mouse_sq_coordinates(self.game.perspective)
             if len(square_highlight_pos) == 0 or square_highlight_pos == self.game.start_sq:
                 square_highlight_pos = (1000, 1000)  # Render square highlight off screen.
-            if not self.game.gs.pawn_promote and self.game.mouse_button_down:
+            if not self.game.gs.pawn_promotion and self.game.mouse_button_down:
                 p.draw.rect(self.screen, "gray",
                             p.Rect(BOARD_X + (self.game.index_adjustment(square_highlight_pos[1]) * SQ_SIZE if self.game.mouse_button_down else self.game.index_adjustment(self.game.start_sq[1]) * SQ_SIZE),
                                    BOARD_Y + (self.game.index_adjustment(square_highlight_pos[0]) * SQ_SIZE if self.game.mouse_button_down else self.game.index_adjustment(self.game.start_sq[0]) * SQ_SIZE),
@@ -251,15 +264,14 @@ class Game:
         self.running = True
         self.mouse_button_down = True
         self.perspective = "WHITE"
-        self.board_flipping = True
-        self.board_flipping_was_on = False
+        self.board_flipping = False
         self.start_sq = ()
         self.player_click_count = 0
         self.screen = SCREEN
 
         self.gs = ChessEngine()
         self.game_over = GameOver()
-        self.pawn_promote = PawnPromoteSelect(self)
+        self.pawn_promotion = PawnPromoteSelect(self)
         self.highlights = Highlighting(self)
         self.animations = AnimationHandler(self)
         self.cords = coordinate_renders()
@@ -309,20 +321,27 @@ class Game:
                     if e.key == p.K_f:
                         self.start_sq = ()
                         self.board_flipping = not self.board_flipping
+                        self.catch_up_flipping()
                         if self.board_flipping:
                             print("Board flipping toggled on.")
                         else:
                             print("Board flipping toggled off.")
                     if e.key == p.K_z:
-                        if self.perspective == "WHITE":
-                            self.perspective = "BLACK"
-                        else:
-                            self.perspective = "WHITE"
+                        if len(PREVIOUS_GAME_STATES) > 0:
+                            self.start_sq = ()
+                            self.gs.undo_move(ai_vs=True)
+                            self.catch_up_flipping()
+                    if e.key == p.K_r:
                         self.start_sq = ()
-                        self.gs.undo_move()
+                        self.gs.reset_state()
             if self.player_click_count == 2 and not self.mouse_button_down:
                 self.start_sq = ()
                 self.player_click_count = 0
+            if not self.gs.white_to_move and len(self.gs.current_valid_moves) > 0:
+                t = time.process_time()
+                move = find_best_move(self.gs)
+                self.ai_handle_move(move)
+
             self.screen.fill((64, 64, 64))
             self.draw_board()
             self.highlights.render()
@@ -331,11 +350,26 @@ class Game:
             self.game_states_management(events)
             p.display.flip()
 
+    def catch_up_flipping(self):
+        """Simple method to make sure perspectives stay correct if we toggle off flipping or undo a move."""
+        if self.board_flipping and self.gs.white_to_move:
+            self.perspective = "WHITE"
+        else:
+            self.perspective = "BLACK"
+        if not self.board_flipping:
+            self.perspective = "WHITE"
+
     def game_states_management(self, events):
-        if self.gs.pawn_promote:
-            self.pawn_promote.game_loop(events)
-            if self.pawn_promote.selected_promotion is not None:
-                self.gs.pawn_promote(self.pawn_promote.selected_promotion)
+        if self.gs.pawn_promotion:
+            self.pawn_promotion.game_loop(events)
+            if self.pawn_promotion.selected_promotion is not None:
+                self.gs.promote(self.pawn_promotion.selected_promotion)
+                self.gs.next_turn_work()
+                self.pawn_promotion.selected_promotion = None
+                if self.perspective == "WHITE":
+                    self.perspective = "BLACK"
+                else:
+                    self.perspective = "WHITE"
 
     def index_adjustment(self, index):
         """Pass any index you need from the board into here. Will return a flipped or still index depending on if the board
@@ -379,7 +413,7 @@ class Game:
                     self.screen.blit(IMAGES[piece], p.Rect(BOARD_X + (self.index_adjustment(j) * SQ_SIZE),
                                                            BOARD_Y + (self.index_adjustment(i) * SQ_SIZE),
                                                            SQ_SIZE, SQ_SIZE))
-        if self.start_sq and self.mouse_button_down and not self.gs.pawn_promote:
+        if self.start_sq and self.mouse_button_down and not self.gs.pawn_promotion:
             pos = p.mouse.get_pos()
             render_piece = self.gs.board[self.start_sq[0]][self.start_sq[1]]
             if render_piece != "--":
@@ -394,13 +428,18 @@ class Game:
                     move_sound.play()
                 else:
                     self.animations.add_animation(move)
-                self.gs.do_move(move)
-                if self.perspective == "WHITE":
-                    self.perspective = "BLACK"
-                else:
-                    self.perspective = "WHITE"
+                self.gs.do_move(valid_move)
+                if not self.gs.pawn_promotion and self.board_flipping:
+                    if self.perspective == "WHITE":
+                        self.perspective = "BLACK"
+                    else:
+                        self.perspective = "WHITE"
                 return True
         return False
+
+    def ai_handle_move(self, move):
+        self.animations.add_animation(move)
+        self.gs.do_move(move)
 
 
 def clicked_on_turn_piece(click, gs):
@@ -437,12 +476,13 @@ def coordinate_renders():
     white_text_render_objects = []
     black_text_render_objects = []
     for i, (num, letter) in enumerate(zip(nums, letters)):
+        boarder_spacing = 8
         # White perspective
-        w_rank = CoordText(num, DARK_SQ if i % 2 == 0 else "white", coordinate_font, None, (BOARD_X, BOARD_Y + (i * SQ_SIZE)))
-        w_file = CoordText(letter, DARK_SQ if i % 2 == 1 else "white", coordinate_font, None, (BOARD_X + ((i + 1) * SQ_SIZE), BOARD_Y + (8 * SQ_SIZE)))
+        w_rank = CoordText(nums[opposite_flipped_index(i)], DARK_SQ if i % 2 == 0 else "white", coordinate_font, (BOARD_X + 5, BOARD_Y + (i * SQ_SIZE)))
+        w_file = CoordText(letters[opposite_flipped_index(i)], DARK_SQ if i % 2 == 1 else "white", coordinate_font, (BOARD_X + ((i + 1) * SQ_SIZE), BOARD_Y + (8 * SQ_SIZE)))
         # Black perspective
-        b_rank = CoordText(nums[opposite_flipped_index(i)], DARK_SQ if i % 2 == 0 else LIGHT_SQ, coordinate_font, None, (BOARD_X, BOARD_Y + (i * SQ_SIZE)))
-        b_file = CoordText(letters[opposite_flipped_index(i)], DARK_SQ if i % 2 == 1 else LIGHT_SQ, coordinate_font, None, (BOARD_X + ((i + 1) * SQ_SIZE), BOARD_Y + (8 * SQ_SIZE)))
+        b_rank = CoordText(num, DARK_SQ if i % 2 == 0 else LIGHT_SQ, coordinate_font, (BOARD_X + 5, BOARD_Y + (i * SQ_SIZE)))
+        b_file = CoordText(letter, DARK_SQ if i % 2 == 1 else LIGHT_SQ, coordinate_font, (BOARD_X + ((i + 1) * SQ_SIZE), BOARD_Y + (8 * SQ_SIZE)))
 
         white_text_render_objects.append((w_rank, w_file))
         black_text_render_objects.append((b_rank, b_file))
@@ -454,7 +494,11 @@ def opposite_flipped_index(index):
     return 8 - index - 1
 
 
-if __name__ == "__main__":
+def main():
     load_images()
     game = Game()
     game.game_loop()
+
+
+if __name__ == "__main__":
+    main()
